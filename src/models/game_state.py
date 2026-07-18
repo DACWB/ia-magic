@@ -107,6 +107,14 @@ class CartaEmJogo(BaseModel):
         virada: Se está virada (tapped).
         poder_atual: Poder considerando buffs em jogo.
         resistencia_atual: Resistência considerando buffs em jogo.
+        tipos: Tipos da carta como o Arena reporta ("CardType_Creature").
+        subtipos: Subtipos ("SubType_Mountain", "SubType_Goblin").
+        cores: Cores da carta ("CardColor_Red").
+        enjoada: Mana summoning sickness — criatura que entrou neste turno e
+            por isso ainda não pode atacar.
+        dano: Dano já marcado na criatura neste turno.
+        atacando: Se está atacando agora.
+        bloqueando: Se está bloqueando agora.
     """
 
     instance_id: int
@@ -117,6 +125,37 @@ class CartaEmJogo(BaseModel):
     virada: bool = False
     poder_atual: str = ""
     resistencia_atual: str = ""
+    tipos: list[str] = Field(default_factory=list)
+    subtipos: list[str] = Field(default_factory=list)
+    cores: list[str] = Field(default_factory=list)
+    enjoada: bool = False
+    dano: int = 0
+    atacando: bool = False
+    bloqueando: bool = False
+
+    @property
+    def eh_terreno(self) -> bool:
+        """Se a carta é um terreno."""
+        return "CardType_Land" in self.tipos
+
+    @property
+    def eh_criatura(self) -> bool:
+        """Se a carta é uma criatura."""
+        return "CardType_Creature" in self.tipos
+
+    @property
+    def pode_atacar(self) -> bool:
+        """Se esta criatura pode declarar ataque agora.
+
+        Três condições: ser criatura, estar desvirada e não estar enjoada.
+        Não considera habilidades especiais (vigilância deixa atacar sem
+        virar, defensor impede atacar) — isso fica pra IA avaliar, que
+        conhece o texto das cartas.
+
+        Returns:
+            True se pode atacar.
+        """
+        return self.eh_criatura and not self.virada and not self.enjoada
 
 
 class Jogador(BaseModel):
@@ -247,6 +286,80 @@ class GameState(BaseModel):
     def cemiterio_oponente(self) -> list[CartaEmJogo]:
         """Cemitério do oponente — a melhor pista do deck dele."""
         return self.cartas_em(Zona.CEMITERIO, self.seat_oponente)
+
+    def mana_disponivel(self, seat: int | None = None) -> dict[str, int]:
+        """Conta a mana que um jogador pode gastar agora.
+
+        Olha os terrenos desvirados no campo e deduz a cor pelo subtipo:
+        `SubType_Mountain` produz vermelho, `SubType_Island` produz azul, e
+        assim por diante — regra que vale pra qualquer terreno com subtipo
+        básico, inclusive os duais (uma Ilha-Montanha conta nas duas cores).
+
+        LIMITAÇÃO CONHECIDA: terrenos sem subtipo básico (que produzem mana
+        por texto, como Terreno do Templo ou artefatos de mana) entram como
+        "incolor". O total de mana fica certo; a cor é que pode estar
+        subestimada. A IA recebe a lista de terrenos junto, então consegue
+        corrigir sozinha — mas o número aqui é conservador de propósito:
+        prefiro dizer que você tem menos mana do que tem, e não o contrário.
+
+        Args:
+            seat: Assento do jogador. Se None, usa o jogador local.
+
+        Returns:
+            Dicionário com "W", "U", "B", "R", "G", "incolor" e "total".
+        """
+        alvo = seat if seat is not None else self.meu_seat
+        if alvo is None:
+            return {}
+
+        cores_por_subtipo = {
+            "SubType_Plains": "W",
+            "SubType_Island": "U",
+            "SubType_Swamp": "B",
+            "SubType_Mountain": "R",
+            "SubType_Forest": "G",
+        }
+
+        contagem = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "incolor": 0, "total": 0}
+
+        for carta in self.cartas.values():
+            if carta.zona is not Zona.CAMPO or carta.controlador_seat != alvo:
+                continue
+            if not carta.eh_terreno or carta.virada:
+                continue
+
+            contagem["total"] += 1
+            producoes = [
+                cor
+                for subtipo, cor in cores_por_subtipo.items()
+                if subtipo in carta.subtipos
+            ]
+            if producoes:
+                for cor in producoes:
+                    contagem[cor] += 1
+            else:
+                contagem["incolor"] += 1
+
+        return contagem
+
+    def criaturas_que_podem_atacar(self) -> list[CartaEmJogo]:
+        """Minhas criaturas aptas a atacar neste turno.
+
+        Returns:
+            Criaturas desviradas e sem enjoo de invocação.
+        """
+        return [c for c in self.meu_campo if c.pode_atacar]
+
+    def criaturas_que_podem_bloquear(self) -> list[CartaEmJogo]:
+        """Criaturas do oponente que podem bloquear meu ataque.
+
+        Enjoo de invocação NÃO impede bloquear — criatura recém-jogada
+        bloqueia normalmente. Só o estado de virada importa aqui.
+
+        Returns:
+            Criaturas desviradas do oponente.
+        """
+        return [c for c in self.campo_oponente if c.eh_criatura and not c.virada]
 
     def cartas_reveladas_do_oponente(self) -> list[CartaEmJogo]:
         """Tudo que o oponente já mostrou: campo, cemitério, exílio e pilha.

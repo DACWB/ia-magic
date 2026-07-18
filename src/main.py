@@ -260,6 +260,105 @@ def analisar_oponente(formato: str = "standard") -> None:
     console.print(f"[dim]{identificador.cliente.resumo_de_gasto()}[/dim]")
 
 
+def recomendar_jogada(formato: str = "standard") -> None:
+    """Lê a partida atual e recomenda a próxima jogada.
+
+    Args:
+        formato: Formato do jogo.
+    """
+    from src.services.deck_identifier import IdentificadorDeDeck
+    from src.services.play_recommender import RecomendadorDeJogada
+
+    try:
+        leitor = LeitorDeLogArena()
+    except ArenaNaoEncontrado as erro:
+        console.print(Panel(str(erro), title="❌", border_style="red"))
+        return
+
+    estado = leitor.ler_arquivo_inteiro()
+
+    if not estado.minha_mao and not estado.criaturas_que_podem_atacar():
+        console.print(
+            Panel(
+                "Nada pra decidir: mão vazia e nenhuma criatura apta a atacar.",
+                title="⏳",
+                border_style="yellow",
+            )
+        )
+        return
+
+    mana = estado.mana_disponivel()
+    console.print(
+        f"[dim]Turno {estado.turno} | {estado.minha_vida} x "
+        f"{estado.vida_oponente} | {mana.get('total', 0)} mana | "
+        f"{len(estado.minha_mao)} cartas na mão[/dim]\n"
+    )
+
+    with console.status("[cyan]Analisando o oponente…"):
+        identificador = IdentificadorDeDeck()
+        analise = identificador.identificar(estado, formato=formato)
+
+    if analise.principal.nome:
+        console.print(
+            f"[dim]Oponente: {analise.principal.nome} "
+            f"({analise.principal.confianca:.0%})[/dim]"
+        )
+
+    with console.status("[cyan]Pensando na jogada…"):
+        recomendador = RecomendadorDeJogada(cliente=identificador.cliente)
+        rec = recomendador.recomendar(estado, analise, formato=formato)
+
+    if rec is None:
+        console.print("[yellow]Sem recomendação.[/yellow]")
+        return
+
+    if rec.alerta:
+        console.print(Panel(rec.alerta, title="🚨 Atenção", border_style="red"))
+
+    console.print(
+        Panel(
+            rec.resumo,
+            title=f"💡 Recomendação ({rec.confianca:.0%} de confiança)",
+            border_style="green",
+        )
+    )
+
+    if rec.sequencia:
+        tabela = Table(show_header=True, header_style="bold")
+        tabela.add_column("#", justify="right", width=3)
+        tabela.add_column("Fazer", width=34)
+        tabela.add_column("Por quê")
+        tabela.add_column("Risco", style="yellow")
+        for jogada in rec.sequencia:
+            tabela.add_row(
+                str(jogada.prioridade), jogada.acao, jogada.motivo, jogada.risco
+            )
+        console.print(tabela)
+
+    if rec.atacar is not None:
+        icone = "⚔️  ATACAR" if rec.atacar else "🛡️  NÃO atacar"
+        alvos = f" com {', '.join(rec.com_quais_atacar)}" if rec.com_quais_atacar else ""
+        console.print(
+            Panel(
+                f"[bold]{icone}{alvos}[/bold]\n\n{rec.motivo_do_ataque}",
+                border_style="cyan",
+            )
+        )
+
+    if rec.motivo_da_mana:
+        icone = "🔒 Segurar mana" if rec.segurar_mana else "💧 Pode gastar tudo"
+        console.print(Panel(f"[bold]{icone}[/bold]\n{rec.motivo_da_mana}",
+                            border_style="blue"))
+
+    if rec.alternativas_descartadas:
+        descartadas = "\n".join(f"• {a}" for a in rec.alternativas_descartadas)
+        console.print(
+            Panel(descartadas, title="🤔 Considerado e descartado", border_style="dim")
+        )
+
+    console.print(f"[dim]{recomendador.cliente.resumo_de_gasto()}[/dim]")
+
+
 def _mostrar_resultado(estado: GameState) -> None:
     """Mostra o resultado da partida, se ela já acabou.
 
@@ -288,5 +387,9 @@ if __name__ == "__main__":
         posicao = argumentos.index("--analisar")
         seguinte = argumentos[posicao + 1] if len(argumentos) > posicao + 1 else ""
         analisar_oponente(formato=seguinte or "standard")
+    elif "--jogada" in argumentos:
+        posicao = argumentos.index("--jogada")
+        seguinte = argumentos[posicao + 1] if len(argumentos) > posicao + 1 else ""
+        recomendar_jogada(formato=seguinte or "standard")
     else:
         mostrar_diagnostico()

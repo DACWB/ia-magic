@@ -242,10 +242,43 @@ sobre informação pública, não raio-x. Travado por
 | 1 | Identificar deck do oponente | ✅ feito |
 | 2 | Ver minhas cartas (coleção) | ⏳ depende de reiniciar o Arena |
 | 3 | Montar decks prévios (Standard, Historic…) | ⏳ depende de #2 |
-| 4 | Recomendar jogada ao vivo (atacar? descer mana? qual magia?) | ⏳ próximo |
-| 5 | Assistente de Draft/Sealed (escolher carta na hora) | ⏳ |
+| 4 | Recomendar jogada ao vivo (atacar? descer mana? qual magia?) | ✅ feito |
+| 5 | Assistente de Draft/Sealed (escolher carta na hora) | ⏳ próximo |
 | 6 | Sideboard entre partidas, aprendendo do jogo anterior | ⏳ |
 | 7 | Brawl (deck de comandante) | ⏳ |
+
+## 🚨 A alucinação que custou o Dia 2 (leia antes de mexer em prompt)
+
+**Aconteceu de verdade em 18/07/2026.** A IA recomendou um ataque afirmando:
+
+> "Nest Robber tem **menace**, então o dano de 2 passa garantido" — **90% de confiança**
+
+Verificado no Scryfall: Nest Robber tem **Haste**, não menace. E o bloqueador
+(Cloudkin Seer) tinha **Flying**, que ela nem mencionou. A jogada recomendada
+seria uma troca 2/1 por 2/1, não dano livre.
+
+**Causa**: a IA raciocinava pela memória que tem das cartas.
+
+**Correção**: `scryfall_service.py` injeta a ficha oficial (texto de regras +
+lista de `keywords`) no prompt, com a instrução explícita *"use ESTE texto,
+não sua memória; se uma habilidade não estiver listada aqui, a carta NÃO a
+tem"*.
+
+**Resultado**: a mesma situação passou a gerar o raciocínio certo — atacar e
+usar Shock no bloqueador pra ganhar a troca. Confiança caiu de 90% pra 86%,
+que é mais honesto.
+
+**Travado por** `test_recomendacao_real_respeita_as_regras`, que falha se a
+palavra "menace" reaparecer no raciocínio.
+
+**Regra do projeto**: nenhum prompt de decisão pode depender da memória do
+modelo sobre uma carta. Sempre injetar a ficha oficial.
+
+### Por que Scryfall e não o banco do Arena
+O banco do Arena tem o texto (tabela `Abilities`), mas o campo
+`Cards.AbilityIds` usa formato não documentado (`"9:101"`). Decodificado
+ingenuamente, atribuiu "Evolve" ao Nest Robber e "Bushido" ao Cloudkin Seer.
+Texto errado com cara de fonte oficial é pior que texto nenhum.
 
 **Fonte de meta escolhida**: conhecimento do Claude + Scryfall (API aberta).
 Sem raspagem de MTGGoldfish — terreno cinzento de termos de uso, e o

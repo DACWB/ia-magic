@@ -408,6 +408,31 @@ class LeitorDeLogArena:
                 existente.resistencia_atual = str(resistencia["value"])
             existente.virada = bool(dados.get("isTapped", existente.virada))
 
+            # Tipos, subtipos e cores vêm do log e não do banco de cartas.
+            # Parece redundante, mas não é: o log reflete o estado ATUAL. Uma
+            # criatura que virou terreno por um efeito aparece aqui como
+            # terreno — o banco continuaria dizendo "criatura".
+            if "cardTypes" in dados:
+                existente.tipos = dados["cardTypes"] or []
+            if "subtypes" in dados:
+                existente.subtipos = dados["subtypes"] or []
+            if "color" in dados:
+                existente.cores = dados["color"] or []
+
+            # Enjoo de invocação: decide se a criatura pode atacar.
+            existente.enjoada = bool(
+                dados.get("hasSummoningSickness", existente.enjoada)
+            )
+            if "damage" in dados:
+                existente.dano = int(dados.get("damage") or 0)
+
+            # Estado de combate. O Arena manda "AttackState_Attacking" /
+            # "BlockState_Blocking" quando aplicável.
+            if "attackState" in dados:
+                existente.atacando = "Attacking" in str(dados["attackState"])
+            if "blockState" in dados:
+                existente.bloqueando = "Blocking" in str(dados["blockState"])
+
             self.estado.cartas[instance_id] = existente
 
     def _aplicar_resultado(self, resultado: dict[str, Any]) -> None:
