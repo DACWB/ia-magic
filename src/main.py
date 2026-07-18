@@ -375,10 +375,57 @@ def _mostrar_resultado(estado: GameState) -> None:
         console.print(Panel("💀 Você perdeu.", border_style="red"))
 
 
+def abrir_painel(formato: str = "standard") -> None:
+    """Abre o painel de controle — a interface principal do sistema.
+
+    Args:
+        formato: Formato do jogo.
+    """
+    from src.ui.dashboard import Painel
+
+    try:
+        Painel(formato=formato).rodar()
+    except ArenaNaoEncontrado as erro:
+        console.print(Panel(str(erro), title="❌ Arena não encontrado",
+                            border_style="red"))
+
+
+def mostrar_ajuda() -> None:
+    """Lista os comandos disponíveis."""
+    tabela = Table(title="🎴 Magic AI Advisor — comandos", show_header=True)
+    tabela.add_column("Comando", style="bold cyan")
+    tabela.add_column("O que faz")
+
+    tabela.add_row("python -m src.main", "Abre o PAINEL (interface principal)")
+    tabela.add_row("python -m src.main draft", "Painel calibrado pra Draft")
+    tabela.add_row("", "")
+    tabela.add_row("--diagnostico", "Confere se está tudo configurado")
+    tabela.add_row("--partida", "Mostra a partida atual, sem IA")
+    tabela.add_row("--acompanhar", "Acompanha a partida ao vivo, sem IA")
+    tabela.add_row("--analisar [formato]", "Só identifica o deck do oponente")
+    tabela.add_row("--jogada [formato]", "Só recomenda a jogada")
+    tabela.add_row("--ajuda", "Esta lista")
+
+    console.print(tabela)
+    console.print(
+        "\n[dim]Dentro do painel: [bold]A[/bold] analisa o oponente, "
+        "[bold]J[/bold] pede jogada, [bold]Q[/bold] sai.[/dim]"
+    )
+
+
+FORMATOS_CONHECIDOS = (
+    "standard", "historic", "explorer", "draft", "sealed", "brawl", "alchemy"
+)
+
+
 if __name__ == "__main__":
     argumentos = sys.argv[1:]
 
-    if "--acompanhar" in argumentos:
+    if "--ajuda" in argumentos or "-h" in argumentos or "--help" in argumentos:
+        mostrar_ajuda()
+    elif "--diagnostico" in argumentos:
+        mostrar_diagnostico()
+    elif "--acompanhar" in argumentos:
         mostrar_partida(acompanhar=True)
     elif "--partida" in argumentos:
         mostrar_partida()
@@ -392,4 +439,10 @@ if __name__ == "__main__":
         seguinte = argumentos[posicao + 1] if len(argumentos) > posicao + 1 else ""
         recomendar_jogada(formato=seguinte or "standard")
     else:
-        mostrar_diagnostico()
+        # Sem comando = abre o painel. É a interface principal, então é o que
+        # acontece quando você só roda `python -m src.main`.
+        # Aceita o formato solto: `python -m src.main draft`
+        formato_pedido = next(
+            (a for a in argumentos if a.lower() in FORMATOS_CONHECIDOS), "standard"
+        )
+        abrir_painel(formato=formato_pedido)
