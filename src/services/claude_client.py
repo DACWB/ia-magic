@@ -153,6 +153,22 @@ class ClienteClaude:
         self.tokens_entrada += resposta.usage.input_tokens
         self.tokens_saida += resposta.usage.output_tokens
 
+        # Resposta cortada por falta de espaço. Precisa de erro PRÓPRIO:
+        # sem isso, o JSON truncado chega no parser e vira um confuso "a IA
+        # não devolveu JSON válido" — que manda investigar o prompt quando o
+        # problema era só o teto de tokens.
+        #
+        # A causa é sutil: com raciocínio adaptativo, os tokens de PENSAMENTO
+        # contam dentro do max_tokens. Um teto que parecia folgado pro texto
+        # fica apertado quando o modelo pensa bastante.
+        if resposta.stop_reason == "max_tokens":
+            raise RespostaInvalida(
+                f"A resposta foi cortada por atingir o teto de "
+                f"{max_tokens or config.claude_max_tokens_recommendation} tokens "
+                f"(o raciocínio adaptativo consome parte desse teto). "
+                f"Aumente CLAUDE_MAX_TOKENS_RECOMMENDATION no .env."
+            )
+
         # Com raciocínio adaptativo pode vir um bloco de pensamento ANTES do
         # texto. Por isso pegamos o último bloco de texto, não `content[0]`.
         blocos_de_texto = [

@@ -98,7 +98,16 @@ class Configuracao(BaseSettings):
     # --- Inteligência artificial ---
     claude_model_primary: str = "claude-sonnet-4-6"
     claude_model_fallback: str = "claude-haiku-4-5"
-    claude_max_tokens_recommendation: int = 2500
+    # Teto de tokens por resposta.
+    #
+    # Era 2500 e a análise completa passou a falhar de forma intermitente,
+    # com o JSON cortado no meio. A causa: com raciocínio adaptativo, os
+    # tokens de PENSAMENTO contam dentro deste teto. Numa análise mais
+    # elaborada, o modelo pensava 1.500 tokens e sobrava pouco pro JSON.
+    #
+    # Subir o teto não custa nada: cobra-se pelos tokens usados, não pelo
+    # limite. O que custa é a chamada falhar no meio da partida.
+    claude_max_tokens_recommendation: int = 8000
 
     # Só é usada em modelos antigos (ver MODELOS_SEM_TEMPERATURE).
     claude_temperature: float = 0.3
