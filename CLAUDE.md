@@ -130,9 +130,32 @@ class Card(BaseModel):
 
 ## 🎯 Estado Atual do Projeto
 
-**FASE**: Planejamento concluído, código ainda não iniciado.
+**FASE**: Dia 1 concluído (falta só a chave da API no `.env`).
 
-**PRÓXIMO PASSO**: Seguir Dia 1 do ROADMAP.
+**Feito no Dia 1**:
+- `venv/` com **Python 3.14.3** + todas as dependências instaladas
+- `src/utils/config.py` — configuração via Pydantic Settings, lida do `.env`
+- `src/utils/terminal.py` — força UTF-8 na saída (Windows nasce em cp1252 e
+  quebra com emoji; o dashboard do Dia 6 depende disso)
+- `src/main.py` — diagnóstico do ambiente (`python -m src.main`)
+- `tests/test_day1.py` — 4 testes: deps, config, chave, chamada real à API
+- `git init` + primeiro commit
+
+**Decisões tomadas durante o Dia 1**:
+- Adicionado `pydantic-settings` ao requirements (é pacote separado do `pydantic`)
+- `DATABASE_PATH` relativo do `.env` é resolvido para absoluto em `config.py`,
+  ancorado na raiz do projeto — senão rodar de outra pasta cria um banco vazio novo
+
+**PENDÊNCIA DO USUÁRIO**: colar a `ANTHROPIC_API_KEY` real no `.env`.
+Enquanto não colar, `test_chave_api_presente` falha de propósito.
+
+**PRÓXIMO PASSO**: Dia 2 do ROADMAP (SQLite + import bulk do Scryfall).
+
+**Comandos**:
+```bash
+venv\Scripts\python.exe -m src.main              # diagnóstico
+venv\Scripts\python.exe -m pytest tests/ -v      # testes
+```
 
 ## 💬 Comunicação
 
