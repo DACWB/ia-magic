@@ -375,16 +375,17 @@ def _mostrar_resultado(estado: GameState) -> None:
         console.print(Panel("💀 Você perdeu.", border_style="red"))
 
 
-def abrir_painel(formato: str = "standard") -> None:
+def abrir_painel(formato: str = "standard", automatico: bool = True) -> None:
     """Abre o painel de controle — a interface principal do sistema.
 
     Args:
         formato: Formato do jogo.
+        automatico: Se True, o conselho aparece sozinho, sem tecla.
     """
     from src.ui.dashboard import Painel
 
     try:
-        Painel(formato=formato).rodar()
+        Painel(formato=formato, automatico=automatico).rodar()
     except ArenaNaoEncontrado as erro:
         console.print(Panel(str(erro), title="❌ Arena não encontrado",
                             border_style="red"))
@@ -396,8 +397,9 @@ def mostrar_ajuda() -> None:
     tabela.add_column("Comando", style="bold cyan")
     tabela.add_column("O que faz")
 
-    tabela.add_row("python -m src.main", "Abre o PAINEL (interface principal)")
+    tabela.add_row("python -m src.main", "Abre o PAINEL em modo AUTOMÁTICO")
     tabela.add_row("python -m src.main draft", "Painel calibrado pra Draft")
+    tabela.add_row("python -m src.main --manual", "Painel só respondendo a teclas")
     tabela.add_row("", "")
     tabela.add_row("--diagnostico", "Confere se está tudo configurado")
     tabela.add_row("--partida", "Mostra a partida atual, sem IA")
@@ -445,4 +447,7 @@ if __name__ == "__main__":
         formato_pedido = next(
             (a for a in argumentos if a.lower() in FORMATOS_CONHECIDOS), "standard"
         )
-        abrir_painel(formato=formato_pedido)
+        abrir_painel(
+            formato=formato_pedido,
+            automatico="--manual" not in argumentos,
+        )

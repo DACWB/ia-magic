@@ -179,7 +179,12 @@ def test_prefetch_dispara_e_entrega_pronto() -> None:
 
     painel._recomendador = RecomendadorFalso()
 
+    # A primeira chamada só marca o board como visto; o disparo só acontece
+    # depois que ele fica estável (ver ESPERA_BOARD_ESTAVEL).
     painel._talvez_pre_calcular(estado)
+    painel._board_estavel_desde = 0.0
+    painel._talvez_pre_calcular(estado)
+
     assert painel._prefetch_thread is not None
 
     painel._prefetch_thread.join(timeout=3)
@@ -213,6 +218,7 @@ def test_prefetch_nao_recalcula_o_mesmo_board() -> None:
     estado = _estado_cheio()
 
     for _ in range(5):
+        painel._board_estavel_desde = 0.0  # finge que já estabilizou
         painel._talvez_pre_calcular(estado)
         if painel._prefetch_thread:
             painel._prefetch_thread.join(timeout=2)
@@ -235,6 +241,137 @@ def test_prefetch_desligado_nao_dispara() -> None:
 
     assert painel._prefetch_thread is None, "Disparou mesmo desligado"
     print("OK - pré-cálculo desligado não dispara")
+
+
+@precisa_do_arena
+def test_automatico_nao_calcula_no_turno_do_oponente() -> None:
+    """No turno dele você raramente decide algo — não vale gastar chamada.
+
+    Sem esse filtro o painel queimaria token a cada animação de carta durante
+    o turno inteiro do oponente.
+    """
+    from src.ui.dashboard import Painel
+
+    painel = Painel(formato="standard")
+    estado = _estado_cheio()
+    estado.jogador_ativo = 2  # turno do oponente (eu sou o assento 1)
+
+    assert not painel._vale_a_pena_calcular(estado)
+    print("OK - não calcula no turno do oponente")
+
+
+@precisa_do_arena
+def test_automatico_calcula_no_meu_turno() -> None:
+    """No meu turno, com carta na mão, vale calcular."""
+    from src.ui.dashboard import Painel
+
+    painel = Painel(formato="standard")
+    estado = _estado_cheio()
+    estado.jogador_ativo = 1  # meu turno
+
+    assert painel._vale_a_pena_calcular(estado)
+    print("OK - calcula no meu turno")
+
+
+@precisa_do_arena
+def test_automatico_espera_board_estabilizar() -> None:
+    """Board mudando não pode disparar cálculo a cada mudancinha.
+
+    Durante uma jogada o estado muda várias vezes em sequência: a carta sai
+    da mão, vai pra pilha, resolve, entra em campo. Calcular a cada passo
+    daria conselho sobre situações que duraram 200 milissegundos — e cobraria
+    por cada uma.
+    """
+    from src.ui.dashboard import Painel
+
+    painel = Painel(formato="standard")
+    estado = _estado_cheio()
+    estado.jogador_ativo = 1
+
+    # Primeira vez: só marca o board como "visto agora", não dispara
+    painel._talvez_pre_calcular(estado)
+    assert painel._prefetch_thread is None, "Disparou sem esperar estabilizar"
+
+    # Logo em seguida, board igual mas ainda dentro da janela de espera
+    painel._talvez_pre_calcular(estado)
+    assert painel._prefetch_thread is None, "Disparou antes da espera terminar"
+
+    print("OK - espera o board estabilizar antes de gastar chamada")
+
+
+@precisa_do_arena
+def test_automatico_publica_resultado_sozinho() -> None:
+    """No automático, o conselho sobe pra tela sem ninguém apertar tecla.
+
+    É o que permite jogar com um monitor só: o Arena fica em foco e o painel
+    atualiza sozinho.
+    """
+    import time as _time
+
+    from src.ui.dashboard import Painel
+
+    painel = Painel(formato="standard", automatico=True)
+    estado = _estado_cheio()
+    estado.jogador_ativo = 1
+
+    class RecomendadorFalso:
+        def recomendar_rapido(self, est, analise=None, formato="standard"):
+            class R:
+                acao = "Atacar com Nest Robber"
+                motivo = "Board livre"
+                atacar = True
+                alerta = ""
+                segundos = 0.1
+
+            return R()
+
+    painel._recomendador = RecomendadorFalso()
+
+    # Simula o board já estável
+    painel._talvez_pre_calcular(estado)
+    painel._board_estavel_desde = 0.0
+    painel._talvez_pre_calcular(estado)
+
+    assert painel._prefetch_thread is not None
+    painel._prefetch_thread.join(timeout=3)
+    _time.sleep(0.05)
+
+    assert painel.rapida is not None, "Não publicou o conselho sozinho"
+    assert painel.rapida.acao == "Atacar com Nest Robber"
+    print("OK - conselho publicado automaticamente, sem tecla")
+
+
+@precisa_do_arena
+def test_manual_nao_publica_sozinho() -> None:
+    """No manual, o pré-cálculo fica guardado até você apertar J."""
+    from src.ui.dashboard import Painel
+
+    painel = Painel(formato="standard", automatico=False)
+    estado = _estado_cheio()
+    estado.jogador_ativo = 1
+
+    class RecomendadorFalso:
+        def recomendar_rapido(self, est, analise=None, formato="standard"):
+            class R:
+                acao = "x"
+                motivo = "y"
+                atacar = None
+                alerta = ""
+                segundos = 0.1
+
+            return R()
+
+    painel._recomendador = RecomendadorFalso()
+    painel._talvez_pre_calcular(estado)
+    painel._board_estavel_desde = 0.0
+    painel._talvez_pre_calcular(estado)
+
+    if painel._prefetch_thread:
+        painel._prefetch_thread.join(timeout=3)
+
+    assert painel.rapida is None, "Publicou sozinho no modo manual"
+    assert painel._prefetch_resultado is not None, "Não guardou o pré-cálculo"
+    print("OK - manual guarda o resultado sem publicar")
 
 
 def test_ler_tecla_nao_trava_sem_tecla() -> None:

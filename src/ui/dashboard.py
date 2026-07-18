@@ -45,6 +45,12 @@ try:
 except ImportError:  # pragma: no cover - só ocorre fora do Windows
     TEM_TECLADO = False
 
+# Quanto tempo o board precisa ficar parado antes de valer uma chamada de IA.
+# Durante uma jogada o estado muda várias vezes em sequência (carta sai da
+# mão, vai pra pilha, resolve, entra em campo). Sem essa espera, o sistema
+# geraria conselho sobre situações que duraram 200 milissegundos.
+ESPERA_BOARD_ESTAVEL = 1.5
+
 
 def ler_tecla() -> str:
     """Lê uma tecla se houver alguma pressionada, sem travar.
@@ -71,11 +77,13 @@ class Painel:
         Painel(formato="standard").rodar()
     """
 
-    def __init__(self, formato: str = "standard") -> None:
+    def __init__(self, formato: str = "standard", automatico: bool = True) -> None:
         """Prepara o painel.
 
         Args:
             formato: Formato do jogo, usado pra calibrar a IA.
+            automatico: Se True (padrão), o conselho aparece sozinho quando
+                for sua vez de decidir, sem precisar apertar tecla.
         """
         self.console = Console()
         self.formato = formato
@@ -105,6 +113,19 @@ class Painel:
         self._prefetch_resultado: Any = None
         self._trava = threading.Lock()
         self.prefetch_ligado: bool = True
+
+        # --- Modo automático ---
+        #
+        # Com UM monitor só, apertar tecla no terminal significa tirar o foco
+        # do Arena — ou seja, parar de jogar. Um copiloto que exige isso não
+        # serve. No automático o conselho aparece sozinho e você só olha.
+        #
+        # Para não queimar tokens à toa, só dispara quando REALMENTE há uma
+        # decisão sua a tomar: seu turno, e algo jogável na mão ou alguma
+        # criatura apta a atacar.
+        self.automatico: bool = automatico
+        self._board_estavel_desde: float = 0.0
+        self._ultima_assinatura_vista: str = ""
 
     # ------------------------------------------------------------------
     # Montagem da tela
@@ -276,21 +297,33 @@ class Painel:
         )
 
     def _rodape(self) -> Panel:
-        """Faixa inferior com atalhos, gasto e mensagens."""
+        """Faixa inferior com modo, atalhos, gasto e mensagens."""
         gasto = ""
-        if self._identificador is not None:
-            gasto = f" · [dim]{self._identificador.cliente.resumo_de_gasto()}[/dim]"
+        for servico in (self._recomendador, self._identificador):
+            if servico is not None:
+                cliente = servico.cliente
+                gasto = (
+                    f" · [dim]{cliente.chamadas} chamadas, "
+                    f"{cliente.tokens_entrada + cliente.tokens_saida:,} tokens[/dim]"
+                )
+                break
+
+        if self.automatico:
+            modo = "[bold green]🤖 AUTOMÁTICO[/bold green] — o conselho aparece sozinho"
+        else:
+            modo = "[bold]✋ MANUAL[/bold] — aperte J pra pedir"
 
         prefetch = "[green]ON[/green]" if self.prefetch_ligado else "[dim]off[/dim]"
         atalhos = (
-            "[bold]J[/bold] conselho rápido · "
-            "[bold]C[/bold] análise completa · "
-            "[bold]A[/bold] analisar oponente · "
+            "[bold]M[/bold] auto/manual · "
+            "[bold]J[/bold] conselho · "
+            "[bold]C[/bold] completa · "
+            "[bold]A[/bold] oponente · "
             f"[bold]P[/bold] pré-cálculo ({prefetch}) · "
             "[bold]Q[/bold] sair"
         )
-        cor = "yellow" if self.pensando else "blue"
-        return Panel(f"{atalhos}\n{self.mensagem}{gasto}", border_style=cor)
+        cor = "yellow" if self.pensando else ("green" if self.automatico else "blue")
+        return Panel(f"{modo}\n{atalhos}\n{self.mensagem}{gasto}", border_style=cor)
 
     def montar(self, estado: GameState) -> Layout:
         """Monta a tela inteira.
@@ -409,14 +442,41 @@ class Painel:
         self.recomendacao = recomendacao
         self.mensagem = "[green]Análise completa pronta.[/green]"
 
+    def _vale_a_pena_calcular(self, estado: GameState) -> bool:
+        """Decide se este momento merece uma chamada de IA.
+
+        Cada chamada custa. Sem esse filtro, o painel gastaria token a cada
+        animação de carta virando no turno do oponente — quando você não tem
+        decisão nenhuma a tomar.
+
+        Os critérios:
+        - É o SEU turno (no turno dele você raramente decide algo)
+        - Existe algo a fazer: carta na mão ou criatura apta a atacar
+
+        Args:
+            estado: Estado atual.
+
+        Returns:
+            True se vale gastar uma chamada.
+        """
+        if estado.meu_seat is None or estado.jogador_ativo != estado.meu_seat:
+            return False
+        return bool(estado.minha_mao or estado.criaturas_que_podem_atacar())
+
     def _talvez_pre_calcular(self, estado: GameState) -> None:
         """Dispara o cálculo do conselho em segundo plano, se o board mudou.
 
         Chamado a cada volta do laço. Só faz alguma coisa quando:
         - o pré-cálculo está ligado
-        - há algo a decidir
+        - vale a pena (seu turno, com decisão a tomar)
+        - o board está ESTÁVEL há pelo menos um instante
         - o board mudou desde o último cálculo
         - não há outra thread já trabalhando
+
+        O "board estável" evita um desperdício bobo: durante uma jogada o
+        estado muda várias vezes em sequência (carta sai da mão, entra na
+        pilha, resolve, entra em campo). Calcular a cada passo geraria
+        conselhos sobre situações que duraram 200 milissegundos.
 
         A thread é `daemon` pra não segurar o programa se você fechar o
         painel no meio de um cálculo.
@@ -428,12 +488,21 @@ class Painel:
             return
         if self._prefetch_thread is not None and self._prefetch_thread.is_alive():
             return
-        if not estado.minha_mao and not estado.criaturas_que_podem_atacar():
+        if not self._vale_a_pena_calcular(estado):
             return
 
         from src.services.play_recommender import RecomendadorDeJogada
 
         assinatura = RecomendadorDeJogada._assinatura(estado)
+
+        # Espera o board parar de mudar antes de gastar uma chamada
+        agora = time.monotonic()
+        if assinatura != self._ultima_assinatura_vista:
+            self._ultima_assinatura_vista = assinatura
+            self._board_estavel_desde = agora
+            return
+        if agora - self._board_estavel_desde < ESPERA_BOARD_ESTAVEL:
+            return
 
         with self._trava:
             if assinatura == self._prefetch_assinatura:
@@ -461,6 +530,15 @@ class Painel:
             with self._trava:
                 if self._prefetch_assinatura == assinatura:
                     self._prefetch_resultado = resultado
+                    # No modo automático o conselho já sobe pra tela sozinho.
+                    # É o que permite jogar sem tirar o foco do Arena.
+                    if self.automatico and resultado is not None:
+                        self.rapida = resultado
+                        self.recomendacao = None
+                        self.mensagem = (
+                            f"[green]Conselho automático "
+                            f"({resultado.segundos:.1f}s).[/green]"
+                        )
 
         self._prefetch_thread = threading.Thread(target=trabalhar, daemon=True)
         self._prefetch_thread.start()
@@ -473,7 +551,12 @@ class Painel:
         """Abre o painel e fica atualizando até você apertar Q."""
         estado = self.leitor.ler_arquivo_inteiro()
 
-        if not TEM_TECLADO:
+        if self.automatico:
+            self.mensagem = (
+                "[green]Modo automático ligado. Volte pro Arena e jogue — "
+                "o conselho aparece aqui sozinho.[/green]"
+            )
+        elif not TEM_TECLADO:
             self.mensagem = (
                 "[yellow]Atalhos de teclado indisponíveis fora do Windows. "
                 "Use os comandos --analisar e --jogada.[/yellow]"
@@ -494,7 +577,15 @@ class Painel:
                 if tecla == "q":
                     break
 
-                if tecla == "p":
+                if tecla == "m":
+                    self.automatico = not self.automatico
+                    self.mensagem = (
+                        "[green]Modo automático: o conselho aparece sozinho.[/green]"
+                        if self.automatico
+                        else "[yellow]Modo manual: aperte J pra pedir.[/yellow]"
+                    )
+
+                elif tecla == "p":
                     self.prefetch_ligado = not self.prefetch_ligado
                     self.mensagem = (
                         "[green]Pré-cálculo ligado.[/green]"
