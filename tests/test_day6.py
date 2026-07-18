@@ -150,6 +150,93 @@ def test_painel_nao_chama_ia_ao_abrir() -> None:
     print("OK - painel abre sem tocar na IA")
 
 
+@precisa_do_arena
+def test_prefetch_dispara_e_entrega_pronto() -> None:
+    """O pré-cálculo roda em segundo plano e o J pega o resultado pronto.
+
+    É o que transforma 2,5s de espera em 0. Sem isso, você aperta J no meio
+    do turno e olha pra tela travada.
+    """
+    import time as _time
+
+    from src.ui.dashboard import Painel
+
+    painel = Painel(formato="standard")
+    estado = _estado_cheio()
+
+    class RecomendadorFalso:
+        def recomendar_rapido(self, est, analise=None, formato="standard"):
+            _time.sleep(0.05)  # simula a latência da IA
+
+            class R:
+                acao = "Atacar com tudo"
+                motivo = "Board livre"
+                atacar = True
+                alerta = ""
+                segundos = 0.05
+
+            return R()
+
+    painel._recomendador = RecomendadorFalso()
+
+    painel._talvez_pre_calcular(estado)
+    assert painel._prefetch_thread is not None
+
+    painel._prefetch_thread.join(timeout=3)
+    assert painel._prefetch_resultado is not None, "Pré-cálculo não entregou"
+
+    # Agora o J tem que ser instantâneo
+    inicio = _time.monotonic()
+    painel.pedir_jogada_rapida(estado)
+    duracao = _time.monotonic() - inicio
+
+    assert painel.rapida is not None
+    assert painel.rapida.acao == "Atacar com tudo"
+    assert duracao < 0.05, f"Não usou o pré-cálculo: {duracao:.3f}s"
+    print(f"OK - pré-cálculo entregue em {duracao*1000:.1f}ms")
+
+
+@precisa_do_arena
+def test_prefetch_nao_recalcula_o_mesmo_board() -> None:
+    """Board parado não pode ficar queimando tokens em segundo plano."""
+    from src.ui.dashboard import Painel
+
+    chamadas = {"total": 0}
+
+    class RecomendadorContado:
+        def recomendar_rapido(self, est, analise=None, formato="standard"):
+            chamadas["total"] += 1
+            return None
+
+    painel = Painel(formato="standard")
+    painel._recomendador = RecomendadorContado()
+    estado = _estado_cheio()
+
+    for _ in range(5):
+        painel._talvez_pre_calcular(estado)
+        if painel._prefetch_thread:
+            painel._prefetch_thread.join(timeout=2)
+
+    assert chamadas["total"] == 1, (
+        f"Recalculou {chamadas['total']}x o mesmo board — queima de tokens"
+    )
+    print("OK - board parado não dispara recálculo")
+
+
+@precisa_do_arena
+def test_prefetch_desligado_nao_dispara() -> None:
+    """Dá pra desligar o pré-cálculo (tecla P) pra economizar tokens."""
+    from src.ui.dashboard import Painel
+
+    painel = Painel(formato="standard")
+    painel.prefetch_ligado = False
+
+    painel._talvez_pre_calcular(_estado_cheio())
+
+    assert painel._prefetch_thread is None, "Disparou mesmo desligado"
+    print("OK - pré-cálculo desligado não dispara")
+
+
 def test_ler_tecla_nao_trava_sem_tecla() -> None:
     """Ler o teclado sem ninguém digitando devolve vazio na hora.
 

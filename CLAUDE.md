@@ -287,6 +287,39 @@ conhecimento do modelo já cobre arquétipos bem.
 **Modelo**: `claude-opus-4-8` em tudo. Fable 5 foi testado e funciona na conta,
 mas o jogador optou pelo Opus por ser o patamar durável e mais barato.
 
+## ⚡ Latência: o que manda é o TAMANHO DA RESPOSTA
+
+**Medido em 18/07/2026** com o prompt real do sistema (5.900 caracteres):
+
+| Configuração | Tempo | Saída | Velocidade |
+|---|---|---|---|
+| opus-4-8 + effort=high (era o padrão) | 22,4s | 1347 tok | 60 tok/s |
+| opus-4-8 + effort=medium | 17,1s | 1053 tok | 62 tok/s |
+| opus-4-8 + effort=low | 13,6s | 827 tok | 61 tok/s |
+| opus-4-8 sem thinking | 17,6s | 927 tok | 53 tok/s |
+| haiku-4-5 | 5,7s | 463 tok | 82 tok/s |
+| **opus-4-8 + resposta CURTA + effort=low** | **2,5s** | **93 tok** | 60 tok/s |
+
+**A velocidade é ~60 tok/s em qualquer modelo e qualquer esforço.** Trocar de
+modelo ou baixar o esforço muda pouco; o que muda tudo é pedir menos texto.
+O erro de projeto era pedir 1.300 tokens de redação pra alguém ler em 10
+segundos de turno.
+
+Anotações:
+- **Streaming não ajuda** com raciocínio adaptativo: o modelo pensa primeiro e
+  só depois escreve (1º texto em 2,9s de 4,2s totais). Não há o que mostrar antes.
+- **Fast mode** (`speed="fast"`) devolveu **429** nesta conta — tem limite de
+  taxa próprio. Não dá pra contar com ele.
+- **Haiku é mais rápido e mais desleixado**: num teste devolveu `"atacar": false`
+  no turno do oponente, quando não havia decisão de ataque nenhuma.
+
+**Solução adotada**: dois modos + pré-cálculo.
+- `recomendar_rapido()` — ~2,5s, resposta de 12 palavras. Tecla **J**.
+- `recomendar()` — ~20s, análise completa. Tecla **C**, pra entre turnos.
+- **Pré-cálculo em segundo plano**: assim que o board muda, uma thread já
+  calcula. Quando você aperta J, normalmente já está pronto (**0s**). Tecla
+  **P** liga/desliga.
+
 ## 📌 Pendências
 
 - [ ] **Reiniciar o Arena** uma vez pra capturar a coleção do jogador

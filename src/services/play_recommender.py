@@ -23,6 +23,8 @@ situações incomuns. A UI mostra o raciocínio junto com a resposta justamente
 pra você discordar quando fizer sentido.
 """
 
+import time
+
 from pydantic import BaseModel, Field
 
 from src.models.game_state import GameState
@@ -77,6 +79,41 @@ class RecomendacaoDeJogada(BaseModel):
     confianca: float = 0.0
 
 
+class RecomendacaoRapida(BaseModel):
+    """Conselho enxuto, pra ler em segundos no meio do turno.
+
+    Attributes:
+        acao: O que fazer, em uma frase curta.
+        motivo: Por quê, em uma frase curta.
+        atacar: True, False, ou None se não é decisão de ataque agora.
+        alerta: Aviso urgente, ou vazio.
+        segundos: Quanto tempo a IA levou pra responder.
+    """
+
+    acao: str = ""
+    motivo: str = ""
+    atacar: bool | None = None
+    alerta: str = ""
+    segundos: float = 0.0
+
+
+SISTEMA_RAPIDO = """Você é um copiloto de Magic: The Gathering dando conselho \
+DURANTE a partida, com o relógio do turno correndo.
+
+Seja telegráfico. O jogador tem poucos segundos para ler.
+
+REGRAS QUE NÃO PODEM SER VIOLADAS:
+- Use SEMPRE o poder/resistência marcado como ATUAL. Nunca some com a base
+  impressa da ficha, nunca invente um terceiro número.
+- Criatura enjoada NÃO ataca, mas bloqueia normalmente.
+- Criatura virada não bloqueia.
+- Voador bloqueia criatura terrestre normalmente. O contrário é que não vale.
+- Não recomende o que não dá pra pagar com a mana disponível.
+- Se não é fase de ataque ou não há decisão de combate, "atacar" é null.
+
+Responda APENAS o JSON, sem texto ao redor."""
+
+
 class RecomendadorDeJogada:
     """Sugere a melhor jogada para o estado atual da partida.
 
@@ -101,6 +138,7 @@ class RecomendadorDeJogada:
         self.cliente: ClienteClaude = cliente or ClienteClaude()
         self.textos: BancoDeTextos = textos or BancoDeTextos()
         self._cache: dict[str, RecomendacaoDeJogada] = {}
+        self._cache_rapido: dict[str, RecomendacaoRapida] = {}
 
     def recomendar(
         self,
@@ -135,6 +173,71 @@ class RecomendadorDeJogada:
 
         recomendacao = self._interpretar(dados)
         self._cache[assinatura] = recomendacao
+        return recomendacao
+
+    def recomendar_rapido(
+        self,
+        estado: GameState,
+        oponente: AnaliseDoOponente | None = None,
+        formato: str = "standard",
+        usar_cache: bool = True,
+    ) -> RecomendacaoRapida | None:
+        """Conselho enxuto, pra usar com o relógio do turno correndo.
+
+        Mede-se em segundos, não em qualidade de redação. A versão completa
+        (`recomendar`) leva ~22s porque escreve 1300 tokens de análise — ótimo
+        pra revisar entre turnos, inútil no meio de um.
+
+        A descoberta que motivou este método: a API entrega ~60 tokens por
+        segundo em qualquer modelo e qualquer esforço. Ou seja, o tempo é
+        ditado pelo TAMANHO DA RESPOSTA. Pedindo 90 tokens em vez de 1300, o
+        conselho sai em ~2,5s.
+
+        Args:
+            estado: Estado da partida.
+            oponente: Análise do oponente, se já feita.
+            formato: Formato do jogo.
+            usar_cache: Reaproveita se o board não mudou.
+
+        Returns:
+            O conselho, ou None se não há nada a decidir.
+        """
+        if not estado.minha_mao and not estado.criaturas_que_podem_atacar():
+            return None
+
+        assinatura = "rapido|" + self._assinatura(estado)
+        if usar_cache and assinatura in self._cache_rapido:
+            return self._cache_rapido[assinatura]
+
+        contexto = self._montar_pergunta(estado, oponente, formato)
+        # Reaproveita todo o contexto (board, mana, fichas das cartas) e troca
+        # só o pedido final — o que a IA deve devolver.
+        contexto = contexto.split("TAREFA")[0]
+
+        pedido = """TAREFA
+Diga a jogada em no máximo 12 palavras, e o motivo em no máximo 15.
+Se houver perigo imediato, use "alerta" (senão deixe vazio).
+
+JSON:
+{"acao": "...", "motivo": "...", "atacar": true/false/null, "alerta": "..."}"""
+
+        inicio = time.monotonic()
+        dados = self.cliente.perguntar_json(
+            sistema=SISTEMA_RAPIDO,
+            usuario=contexto + pedido,
+            max_tokens=1200,
+            rapido=True,
+        )
+        duracao = time.monotonic() - inicio
+
+        recomendacao = RecomendacaoRapida(
+            acao=dados.get("acao", ""),
+            motivo=dados.get("motivo", ""),
+            atacar=dados.get("atacar"),
+            alerta=dados.get("alerta", "") or "",
+            segundos=duracao,
+        )
+        self._cache_rapido[assinatura] = recomendacao
         return recomendacao
 
     @staticmethod

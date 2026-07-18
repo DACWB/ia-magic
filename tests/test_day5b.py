@@ -344,6 +344,107 @@ def test_offline_nao_vai_a_rede() -> None:
     print("OK - modo offline não toca na rede")
 
 
+def test_modo_rapido_pede_resposta_curta() -> None:
+    """O modo rápido tem que pedir resposta curta — é o que define a latência.
+
+    Medição de 18/07/2026 com o prompt real: a API entrega ~60 tokens por
+    segundo em QUALQUER modelo e qualquer esforço. Ou seja, o tempo é ditado
+    pelo tamanho da resposta, não pelo modelo.
+
+      1347 tokens de saída -> 22,4s
+        93 tokens de saída ->  2,5s
+
+    Se alguém "melhorar" este prompt pedindo mais detalhe, a latência volta.
+    """
+    enviado = {"sistema": "", "usuario": "", "rapido": None}
+
+    class ClienteEspiao:
+        def perguntar_json(self, sistema: str, usuario: str, **k: object) -> dict:
+            enviado["sistema"] = sistema
+            enviado["usuario"] = usuario
+            enviado["rapido"] = k.get("rapido")
+            return {"acao": "Atacar", "motivo": "Board livre", "atacar": True}
+
+    recomendador = RecomendadorDeJogada(cliente=ClienteEspiao())  # type: ignore[arg-type]
+    rapida = recomendador.recomendar_rapido(_estado_de_combate())
+
+    assert rapida is not None
+    assert rapida.acao == "Atacar"
+    assert rapida.atacar is True
+
+    assert enviado["rapido"] is True, "Não usou os parâmetros do modo rápido"
+    assert "12 palavras" in enviado["usuario"], "Não limitou o tamanho da resposta"
+    assert "telegráfico" in enviado["sistema"].lower()
+
+    # As regras do jogo não podem sumir só porque a resposta é curta
+    assert "enjoada" in enviado["sistema"].lower()
+    assert "ATUAL" in enviado["sistema"]
+
+    # O contexto do board tem que continuar lá (mana, cartas, fichas)
+    assert "MINHA MANA" in enviado["usuario"]
+    assert "FICHA OFICIAL" in enviado["usuario"]
+
+    print("OK - modo rápido pede resposta curta sem perder as regras")
+
+
+def test_modo_rapido_tem_cache_proprio() -> None:
+    """Rápido e completo não podem compartilhar cache.
+
+    Se compartilhassem, pedir o rápido depois do completo devolveria o objeto
+    errado — e o painel quebraria ao ler um campo que não existe.
+    """
+    chamadas = {"total": 0}
+
+    class ClienteContado:
+        def perguntar_json(self, **_k: object) -> dict:
+            chamadas["total"] += 1
+            return {"acao": "x", "motivo": "y", "summary": "z"}
+
+    recomendador = RecomendadorDeJogada(cliente=ClienteContado())  # type: ignore[arg-type]
+    estado = _estado_de_combate()
+
+    rapida = recomendador.recomendar_rapido(estado)
+    completa = recomendador.recomendar(estado)
+
+    assert chamadas["total"] == 2, "Um modo reusou o cache do outro"
+    assert rapida is not None and completa is not None
+    assert hasattr(rapida, "acao")
+    assert hasattr(completa, "sequencia")
+
+    # Segunda chamada de cada um usa o cache
+    recomendador.recomendar_rapido(estado)
+    recomendador.recomendar(estado)
+    assert chamadas["total"] == 2, "Cache não funcionou"
+
+    print("OK - caches separados por modo")
+
+
+@precisa_de_api
+def test_modo_rapido_responde_em_menos_de_6s() -> None:
+    """A latência real precisa caber num turno de Arena.
+
+    O limite de 6s é folgado de propósito: a medição foi 2,5s, e rede varia.
+    O que este teste protege é a regressão grosseira — alguém aumentar o
+    tamanho da resposta e voltar pros 22s sem perceber.
+    """
+    import time as _time
+
+    recomendador = RecomendadorDeJogada()
+    inicio = _time.monotonic()
+    rapida = recomendador.recomendar_rapido(_estado_de_combate(), formato="draft")
+    duracao = _time.monotonic() - inicio
+
+    assert rapida is not None
+    assert rapida.acao, "Veio sem ação"
+    assert duracao < 6.0, f"Lento demais: {duracao:.1f}s (esperado ~2,5s)"
+
+    # Curto de verdade? A resposta tem que caber num piscar de olhos
+    assert len(rapida.acao.split()) <= 20, f"Ação longa demais: {rapida.acao}"
+
+    print(f"\n   {duracao:.1f}s — {rapida.acao} | {rapida.motivo}")
+    print(f"   {recomendador.cliente.resumo_de_gasto()}")
+
+
 @precisa_de_api
 def test_recomendacao_real_respeita_as_regras() -> None:
     """A IA recomenda algo jogável e respeita as regras do jogo.

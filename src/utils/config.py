@@ -104,9 +104,28 @@ class Configuracao(BaseSettings):
     claude_temperature: float = 0.3
 
     # Substitui a temperatura nos modelos novos: regula quanto o modelo pensa
-    # antes de responder. "high" é o equilíbrio bom pra decisão de jogada;
-    # "low" serve pra tarefas mecânicas e sai mais barato.
+    # antes de responder. "high" é o equilíbrio bom pra análise com calma;
+    # "low" serve pra decisão rápida e sai mais barato.
     claude_effort: Literal["low", "medium", "high", "xhigh", "max"] = "high"
+
+    # --- Modo rápido (conselho durante a partida) ---
+    #
+    # Medido em 18/07/2026, com o prompt real do sistema:
+    #
+    #   resposta completa (1347 tokens), effort=high  -> 22,4s
+    #   resposta curta (93 tokens),      effort=low   ->  2,5s
+    #   resposta curta no haiku-4-5                   ->  1,7s
+    #
+    # A velocidade é ~60 tokens/s em qualquer configuração. Ou seja: o que
+    # manda no tempo é o TAMANHO DA RESPOSTA, não o modelo nem o esforço.
+    # Pedir uma redação de 1300 tokens pra alguém ler em 10 segundos de turno
+    # era o erro de projeto.
+    #
+    # O haiku é mais rápido mas erra mais (num teste devolveu "atacar: false"
+    # no turno do oponente, quando não havia decisão de ataque nenhuma).
+    # Por isso o padrão é o opus com esforço baixo.
+    claude_model_rapido: str = "claude-opus-4-8"
+    claude_effort_rapido: Literal["low", "medium", "high", "xhigh", "max"] = "low"
 
     # --- Idioma ---
     # Em qual idioma MOSTRAR as cartas pra você. Não afeta o que é enviado
@@ -167,12 +186,30 @@ class Configuracao(BaseSettings):
         Returns:
             Dicionário pronto pra ser expandido na chamada da API.
         """
-        alvo = modelo or self.claude_model_primary
+        return self._parametros(modelo or self.claude_model_primary, self.claude_effort)
 
-        if alvo in MODELOS_SEM_TEMPERATURE:
+    def parametros_rapidos(self) -> dict[str, object]:
+        """Parâmetros do modo rápido, pro conselho durante a partida.
+
+        Returns:
+            Dicionário pronto pra ser expandido na chamada da API.
+        """
+        return self._parametros(self.claude_model_rapido, self.claude_effort_rapido)
+
+    def _parametros(self, modelo: str, esforco: str) -> dict[str, object]:
+        """Monta os parâmetros pro modelo e esforço dados.
+
+        Args:
+            modelo: Nome do modelo.
+            esforco: Nível de esforço.
+
+        Returns:
+            Dicionário de parâmetros.
+        """
+        if modelo in MODELOS_SEM_TEMPERATURE:
             return {
                 "thinking": {"type": "adaptive"},
-                "output_config": {"effort": self.claude_effort},
+                "output_config": {"effort": esforco},
             }
 
         return {"temperature": self.claude_temperature}

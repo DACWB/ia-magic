@@ -116,6 +116,7 @@ class ClienteClaude:
         usuario: str,
         max_tokens: int | None = None,
         modelo: str | None = None,
+        rapido: bool = False,
     ) -> str:
         """Faz uma pergunta e devolve o texto da resposta.
 
@@ -124,6 +125,8 @@ class ClienteClaude:
             usuario: A pergunta em si, com os dados da partida.
             max_tokens: Teto de tokens na resposta.
             modelo: Sobrescreve o modelo desta chamada.
+            rapido: Se True, usa o modelo e o esforço do modo rápido —
+                pra conselho durante a partida, quando o relógio corre.
 
         Returns:
             O texto da resposta.
@@ -131,14 +134,19 @@ class ClienteClaude:
         Raises:
             APIError: Se a API falhar (rede, autenticação, limite).
         """
-        alvo = modelo or self.modelo
+        if rapido:
+            alvo = modelo or config.claude_model_rapido
+            parametros = config.parametros_rapidos()
+        else:
+            alvo = modelo or self.modelo
+            parametros = config.parametros_de_geracao(alvo)
 
         resposta = self._cliente.messages.create(
             model=alvo,
             max_tokens=max_tokens or config.claude_max_tokens_recommendation,
             system=sistema,
             messages=[{"role": "user", "content": usuario}],
-            **config.parametros_de_geracao(alvo),  # type: ignore[arg-type]
+            **parametros,  # type: ignore[arg-type]
         )
 
         self.chamadas += 1
@@ -162,6 +170,7 @@ class ClienteClaude:
         usuario: str,
         max_tokens: int | None = None,
         modelo: str | None = None,
+        rapido: bool = False,
     ) -> dict:
         """Como `perguntar`, mas devolve a resposta já convertida em dicionário.
 
@@ -175,6 +184,7 @@ class ClienteClaude:
             usuario: A pergunta.
             max_tokens: Teto de tokens na resposta.
             modelo: Sobrescreve o modelo desta chamada.
+            rapido: Usa o modelo e esforço do modo rápido.
 
         Returns:
             A resposta como dicionário.
@@ -182,7 +192,7 @@ class ClienteClaude:
         Raises:
             RespostaInvalida: Se não houver JSON válido na resposta.
         """
-        texto = self.perguntar(sistema, usuario, max_tokens, modelo)
+        texto = self.perguntar(sistema, usuario, max_tokens, modelo, rapido)
         dados = maior_objeto_json(texto)
 
         if dados is None:

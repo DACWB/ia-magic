@@ -21,6 +21,7 @@ custaria uma fortuna e a tela viveria travada. Por isso:
 Você continua no controle do gasto, e o painel nunca trava sem você mandar.
 """
 
+import threading
 import time
 from typing import Any
 
@@ -87,8 +88,23 @@ class Painel:
 
         self.analise: Any = None
         self.recomendacao: Any = None
-        self.mensagem: str = "Pressione [A] pra analisar o oponente ou [J] pra pedir jogada."
+        self.rapida: Any = None
+        self.mensagem: str = "Pressione [J] pra conselho rápido, [A] pra analisar o oponente."
         self.pensando: bool = False
+
+        # --- Pré-cálculo em segundo plano ---
+        #
+        # O conselho rápido leva ~2,5s. Parece pouco, mas no meio de um turno
+        # com o relógio correndo é uma eternidade. A solução não é deixar mais
+        # rápido — é começar ANTES de você pedir.
+        #
+        # Assim que o board muda, uma thread já vai calculando. Quando você
+        # aperta J, a resposta normalmente já está pronta: 0 segundos.
+        self._prefetch_thread: threading.Thread | None = None
+        self._prefetch_assinatura: str = ""
+        self._prefetch_resultado: Any = None
+        self._trava = threading.Lock()
+        self.prefetch_ligado: bool = True
 
     # ------------------------------------------------------------------
     # Montagem da tela
@@ -175,10 +191,49 @@ class Painel:
 
     def _painel_da_jogada(self) -> Panel:
         """Mostra a recomendação de jogada, se já foi pedida."""
+        # O conselho rápido tem prioridade na tela: é o que você lê no meio
+        # do turno. A análise completa aparece embaixo, se existir.
+        if self.rapida is not None and self.recomendacao is None:
+            partes: list[Any] = []
+            if self.rapida.alerta:
+                partes.append(Text(f"🚨 {self.rapida.alerta}", style="bold red"))
+                partes.append(Text(""))
+
+            partes.append(Text(self.rapida.acao, style="bold green"))
+            partes.append(Text(""))
+            partes.append(Text(self.rapida.motivo, style="dim"))
+
+            if self.rapida.atacar is not None:
+                partes.append(Text(""))
+                partes.append(
+                    Text(
+                        "⚔ ATACAR" if self.rapida.atacar else "🛡 NÃO atacar",
+                        style="bold cyan",
+                    )
+                )
+
+            partes.append(Text(""))
+            partes.append(
+                Text(
+                    f"({self.rapida.segundos:.1f}s · [C] análise completa)",
+                    style="dim",
+                )
+            )
+            return Panel(Group(*partes), title="⚡ Conselho rápido",
+                         border_style="green")
+
         if self.recomendacao is None:
+            pronto = self._prefetch_resultado is not None
+            estado_prefetch = (
+                "[green]conselho já calculado — aperte J pra ver[/green]"
+                if pronto
+                else "[dim]calculando em segundo plano…[/dim]"
+                if self._prefetch_thread and self._prefetch_thread.is_alive()
+                else "[dim]aguardando mudança no board[/dim]"
+            )
             return Panel(
-                "[dim]Nenhuma recomendação ainda.\n"
-                "Pressione [bold]J[/bold] pra pedir.[/dim]",
+                f"[dim]Pressione [bold]J[/bold] pra conselho rápido.[/dim]\n\n"
+                f"{estado_prefetch}",
                 title="💡 Jogada",
                 border_style="dim",
             )
@@ -226,9 +281,12 @@ class Painel:
         if self._identificador is not None:
             gasto = f" · [dim]{self._identificador.cliente.resumo_de_gasto()}[/dim]"
 
+        prefetch = "[green]ON[/green]" if self.prefetch_ligado else "[dim]off[/dim]"
         atalhos = (
+            "[bold]J[/bold] conselho rápido · "
+            "[bold]C[/bold] análise completa · "
             "[bold]A[/bold] analisar oponente · "
-            "[bold]J[/bold] pedir jogada · "
+            f"[bold]P[/bold] pré-cálculo ({prefetch}) · "
             "[bold]Q[/bold] sair"
         )
         cor = "yellow" if self.pensando else "blue"
@@ -286,25 +344,62 @@ class Painel:
         self.analise = self._identificador.identificar(estado, formato=self.formato)
         self.mensagem = "[green]Oponente analisado.[/green]"
 
-    def pedir_jogada(self, estado: GameState) -> None:
-        """Pede à IA a recomendação de jogada.
+    def _garantir_recomendador(self) -> Any:
+        """Cria o recomendador na primeira vez que for preciso."""
+        from src.services.play_recommender import RecomendadorDeJogada
 
-        Analisa o oponente antes, se ainda não tiver feito: a recomendação
-        fica bem melhor sabendo contra o que se joga.
+        if self._recomendador is None:
+            cliente = self._identificador.cliente if self._identificador else None
+            self._recomendador = RecomendadorDeJogada(cliente=cliente)
+        return self._recomendador
+
+    def pedir_jogada_rapida(self, estado: GameState) -> None:
+        """Mostra o conselho rápido, usando o pré-cálculo se estiver pronto.
 
         Args:
             estado: Estado atual.
         """
         from src.services.play_recommender import RecomendadorDeJogada
 
+        assinatura = RecomendadorDeJogada._assinatura(estado)
+
+        # O pré-cálculo já respondeu pra ESTE board? Então é instantâneo.
+        with self._trava:
+            pronto = self._prefetch_resultado
+            assinatura_pronta = self._prefetch_assinatura
+
+        if pronto is not None and assinatura_pronta == assinatura:
+            self.rapida = pronto
+            self.recomendacao = None
+            self.mensagem = "[green]Conselho pronto (pré-calculado).[/green]"
+            return
+
+        # Não deu tempo de pré-calcular: calcula agora mesmo.
+        recomendador = self._garantir_recomendador()
+        rapida = recomendador.recomendar_rapido(
+            estado, self.analise, formato=self.formato
+        )
+        if rapida is None:
+            self.mensagem = "[yellow]Nada pra decidir agora.[/yellow]"
+            return
+
+        self.rapida = rapida
+        self.recomendacao = None
+        self.mensagem = f"[green]Conselho em {rapida.segundos:.1f}s.[/green]"
+
+    def pedir_jogada(self, estado: GameState) -> None:
+        """Pede a análise COMPLETA da jogada — mais lenta, mais detalhada.
+
+        Leva ~20s, então serve pra revisar entre turnos, não no meio de um.
+        Analisa o oponente antes, se ainda não tiver feito.
+
+        Args:
+            estado: Estado atual.
+        """
         if self.analise is None:
             self.analisar_oponente(estado)
 
-        if self._recomendador is None:
-            cliente = self._identificador.cliente if self._identificador else None
-            self._recomendador = RecomendadorDeJogada(cliente=cliente)
-
-        recomendacao = self._recomendador.recomendar(
+        recomendacao = self._garantir_recomendador().recomendar(
             estado, self.analise, formato=self.formato
         )
         if recomendacao is None:
@@ -312,7 +407,63 @@ class Painel:
             return
 
         self.recomendacao = recomendacao
-        self.mensagem = "[green]Jogada recomendada.[/green]"
+        self.mensagem = "[green]Análise completa pronta.[/green]"
+
+    def _talvez_pre_calcular(self, estado: GameState) -> None:
+        """Dispara o cálculo do conselho em segundo plano, se o board mudou.
+
+        Chamado a cada volta do laço. Só faz alguma coisa quando:
+        - o pré-cálculo está ligado
+        - há algo a decidir
+        - o board mudou desde o último cálculo
+        - não há outra thread já trabalhando
+
+        A thread é `daemon` pra não segurar o programa se você fechar o
+        painel no meio de um cálculo.
+
+        Args:
+            estado: Estado atual.
+        """
+        if not self.prefetch_ligado:
+            return
+        if self._prefetch_thread is not None and self._prefetch_thread.is_alive():
+            return
+        if not estado.minha_mao and not estado.criaturas_que_podem_atacar():
+            return
+
+        from src.services.play_recommender import RecomendadorDeJogada
+
+        assinatura = RecomendadorDeJogada._assinatura(estado)
+
+        with self._trava:
+            if assinatura == self._prefetch_assinatura:
+                return  # já calculado (ou em cálculo) pra este board
+            self._prefetch_assinatura = assinatura
+            self._prefetch_resultado = None
+
+        # Fotografa o estado: o laço principal continua atualizando o
+        # `estado` original enquanto a thread trabalha, e calcular em cima
+        # de um objeto que muda no meio daria conselho sobre um board que
+        # não existe mais.
+        instantaneo = estado.model_copy(deep=True)
+
+        def trabalhar() -> None:
+            try:
+                resultado = self._garantir_recomendador().recomendar_rapido(
+                    instantaneo, self.analise, formato=self.formato
+                )
+            except Exception:
+                # Falha no pré-cálculo é silenciosa de propósito: é um luxo,
+                # não um requisito. Se falhar, o J calcula na hora e o
+                # jogador vê o erro ali.
+                resultado = None
+
+            with self._trava:
+                if self._prefetch_assinatura == assinatura:
+                    self._prefetch_resultado = resultado
+
+        self._prefetch_thread = threading.Thread(target=trabalhar, daemon=True)
+        self._prefetch_thread.start()
 
     # ------------------------------------------------------------------
     # Laço principal
@@ -343,7 +494,15 @@ class Painel:
                 if tecla == "q":
                     break
 
-                if tecla in ("a", "j"):
+                if tecla == "p":
+                    self.prefetch_ligado = not self.prefetch_ligado
+                    self.mensagem = (
+                        "[green]Pré-cálculo ligado.[/green]"
+                        if self.prefetch_ligado
+                        else "[yellow]Pré-cálculo desligado (economiza tokens).[/yellow]"
+                    )
+
+                elif tecla in ("a", "j", "c"):
                     # Mostra "pensando" ANTES de chamar a IA. Sem isso a tela
                     # congela por vários segundos sem explicação, e você não
                     # sabe se travou ou está trabalhando.
@@ -354,6 +513,8 @@ class Painel:
                     try:
                         if tecla == "a":
                             self.analisar_oponente(estado)
+                        elif tecla == "j":
+                            self.pedir_jogada_rapida(estado)
                         else:
                             self.pedir_jogada(estado)
                     except Exception as erro:
@@ -363,6 +524,7 @@ class Painel:
                     finally:
                         self.pensando = False
 
+                self._talvez_pre_calcular(estado)
                 live.update(self.montar(estado))
                 time.sleep(intervalo)
 
