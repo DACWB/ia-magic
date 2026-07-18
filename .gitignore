@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv/
+
+# Environment
+.env
+.env.local
+
+# Database
+*.db
+*.db-journal
+data/magic-ai.db
+data/backups/
+
+# Scryfall data (grande, baixa via script)
+data/scryfall*.json
+data/scryfall*.json.gz
+
+# Logs & Debug
+logs/*
+!logs/.gitkeep
+*.log
+debug_frames/
+screenshots/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Sessions (contêm dados pessoais)
+sessions/*.json
+!sessions/.gitkeep

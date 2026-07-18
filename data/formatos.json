@@ -1,0 +1,138 @@
+{
+  "formats": {
+    "standard": {
+      "name": "Standard",
+      "description": "Cartas dos ~2 anos mais recentes",
+      "deck_size": 60,
+      "sideboard_size": 15,
+      "rotation": true,
+      "meta_source": "MTGGoldfish",
+      "meta_url": "https://www.mtggoldfish.com/metagame/standard",
+      "typical_length_minutes": 15,
+      "bo_options": [1, 3],
+      "recommended_archetypes": {
+        "bo1": ["aggro", "combo"],
+        "bo3": ["midrange", "control"]
+      }
+    },
+    
+    "historic": {
+      "name": "Historic",
+      "description": "Todas as cartas do Arena (sem rotação)",
+      "deck_size": 60,
+      "sideboard_size": 15,
+      "rotation": false,
+      "meta_source": "MTGGoldfish",
+      "meta_url": "https://www.mtggoldfish.com/metagame/historic",
+      "typical_length_minutes": 20,
+      "bo_options": [1, 3],
+      "recommended_archetypes": {
+        "bo1": ["combo", "aggro"],
+        "bo3": ["control", "midrange"]
+      }
+    },
+    
+    "explorer": {
+      "name": "Explorer",
+      "description": "Cartas do Arena, regras de Pioneer",
+      "deck_size": 60,
+      "sideboard_size": 15,
+      "rotation": false,
+      "meta_source": "MTGGoldfish",
+      "meta_url": "https://www.mtggoldfish.com/metagame/explorer",
+      "typical_length_minutes": 18,
+      "bo_options": [1, 3]
+    },
+    
+    "draft": {
+      "name": "Draft",
+      "description": "Abrir 3 packs e montar deck 40 cartas",
+      "deck_size": 40,
+      "sideboard_size": 0,
+      "rotation": false,
+      "typical_length_minutes": 20,
+      "bo_options": [1, 3],
+      "sub_formats": [
+        "Quick Draft (vs bots, BO1)",
+        "Premier Draft (vs humanos, BO1)",
+        "Traditional Draft (BO3)"
+      ],
+      "strategy": {
+        "lands_recommended": 17,
+        "curve_avg_target": 2.8,
+        "priorities": [
+          "Bombs (criaturas grandes)",
+          "Removal versátil",
+          "Sinergias do set"
+        ]
+      },
+      "pick_order_source": "17Lands",
+      "pick_order_url": "https://www.17lands.com"
+    },
+    
+    "sealed": {
+      "name": "Sealed",
+      "description": "6 packs pra montar deck 40 cartas",
+      "deck_size": 40,
+      "sideboard_size": 0,
+      "rotation": false,
+      "typical_length_minutes": 25,
+      "bo_options": [1, 3],
+      "strategy": {
+        "colors_max": 2,
+        "curve_avg_target": 3.0,
+        "priorities": [
+          "Cartas fortes individuais",
+          "Removal",
+          "Bombs"
+        ]
+      }
+    },
+    
+    "brawl": {
+      "name": "Brawl",
+      "description": "Formato Commander no Arena",
+      "deck_size": 60,
+      "commander_size": 1,
+      "rotation": false,
+      "bo_options": [1],
+      "sub_formats": [
+        "Standard Brawl (cartas Standard)",
+        "Historic Brawl (todas do Arena, 100 cartas)"
+      ]
+    },
+    
+    "alchemy": {
+      "name": "Alchemy",
+      "description": "Standard com cartas rebalanceadas/digitais",
+      "deck_size": 60,
+      "sideboard_size": 15,
+      "rotation": true,
+      "bo_options": [1, 3]
+    }
+  },
+  
+  "bo_types": {
+    "1": {
+      "name": "Best of 1",
+      "description": "Uma partida decide",
+      "sideboard": false,
+      "strategy": "Otimizar mainboard contra meta médio",
+      "typical_length": "10-15 min"
+    },
+    "3": {
+      "name": "Best of 3",
+      "description": "Melhor de 3 partidas",
+      "sideboard": true,
+      "strategy": "Sideboard reativo, decks versáteis",
+      "typical_length": "30-45 min"
+    },
+    "5": {
+      "name": "Best of 5 (Torneios)",
+      "description": "Melhor de 5, geralmente em finais",
+      "sideboard": true,
+      "strategy": "Sideboard MUITO reativo",
+      "typical_length": "60-90 min"
+    }
+  }
+}

@@ -1,0 +1,215 @@
+{
+  "archetypes": {
+    "aggro": {
+      "name": "Aggro",
+      "description": "Vence rápido (turno 4-6) com pressão constante",
+      "curve_avg": 2.0,
+      "wins_by_turn": [4, 5, 6],
+      "key_traits": [
+        "Curva baixa (1-2 mana)",
+        "Ataca desde T1",
+        "Poucas cartas de resposta",
+        "Life total fica baixo"
+      ],
+      "key_card_patterns": [
+        "criaturas 1-mana com haste ou prowess",
+        "burn direto (Lightning Bolt, Play with Fire)",
+        "combat tricks"
+      ],
+      "counters": [
+        "remoção barata",
+        "life gain",
+        "bloqueadores baratos"
+      ],
+      "sub_archetypes": [
+        "Mono Red",
+        "Boros Aggro",
+        "Rakdos Aggro",
+        "Elves Aggro"
+      ]
+    },
+    
+    "midrange": {
+      "name": "Midrange",
+      "description": "Jogar cartas eficientes, ganhando valor",
+      "curve_avg": 2.8,
+      "wins_by_turn": [6, 7, 8],
+      "key_traits": [
+        "Curva balanceada (2-4 mana)",
+        "Mix de criaturas + remoção",
+        "Life gerenciado",
+        "Dependência de card advantage"
+      ],
+      "key_card_patterns": [
+        "hand disruption (Thoughtseize)",
+        "criaturas 2-3 CMC com valor",
+        "removal versátil"
+      ],
+      "counters": [
+        "Aggro extremo",
+        "Control puro",
+        "cards que geram 2-por-1"
+      ],
+      "sub_archetypes": [
+        "Golgari Midrange",
+        "Grixis Midrange",
+        "Jund",
+        "Junk"
+      ]
+    },
+    
+    "control": {
+      "name": "Control",
+      "description": "Prevenir tudo e vencer late game",
+      "curve_avg": 3.5,
+      "wins_by_turn": [8, 12, 15],
+      "key_traits": [
+        "Muita remoção + counters",
+        "Poucas criaturas (2-4)",
+        "Life fica em 20",
+        "Board wipes essenciais"
+      ],
+      "key_card_patterns": [
+        "counter spells (Counterspell, Consider)",
+        "board wipes (Wrath, Farewell)",
+        "cantrips (Consider, Preordain)"
+      ],
+      "counters": [
+        "Hand disruption early",
+        "cards irremovíveis",
+        "aggro extremo"
+      ],
+      "sub_archetypes": [
+        "Azorius Control",
+        "Grixis Control",
+        "Jeskai Control",
+        "Esper Control"
+      ]
+    },
+    
+    "combo": {
+      "name": "Combo",
+      "description": "Montar combinação vencedora",
+      "curve_avg": 2.5,
+      "wins_by_turn": [3, 4, 5],
+      "key_traits": [
+        "Tutors e cantrips",
+        "Peças únicas de combo",
+        "Life irrelevante",
+        "Vence antes de reagir"
+      ],
+      "key_card_patterns": [
+        "tutors (Demonic Tutor)",
+        "peças únicas (Splinter Twin, Deceiver Exarch)",
+        "cantrips consistentes"
+      ],
+      "counters": [
+        "Discard early (Thoughtseize)",
+        "counter spells",
+        "aggro extremo"
+      ],
+      "sub_archetypes": [
+        "Splinter Twin",
+        "Storm",
+        "Neoform Combo",
+        "Cephalid Breakfast"
+      ]
+    },
+    
+    "ramp": {
+      "name": "Ramp",
+      "description": "Big mana rápido pra jogar bombs",
+      "curve_avg": 4.0,
+      "wins_by_turn": [4, 5, 6],
+      "key_traits": [
+        "Muitas cartas de mana",
+        "Criaturas 6-8 mana",
+        "Life mantido com ganho",
+        "Vence com bombs"
+      ],
+      "key_card_patterns": [
+        "ramp (Cultivate, Rampant Growth)",
+        "elves ramp (Llanowar Elves)",
+        "big creatures (Uro, Emrakul, Cavalier)"
+      ],
+      "counters": [
+        "Aggro extremo",
+        "Land destruction",
+        "Counter spells early"
+      ],
+      "sub_archetypes": [
+        "Simic Ramp",
+        "Domain Ramp",
+        "Green Devotion",
+        "Mono Green Ramp"
+      ]
+    },
+    
+    "tempo": {
+      "name": "Tempo",
+      "description": "Pressão + negar respostas",
+      "curve_avg": 2.2,
+      "wins_by_turn": [5, 6, 7],
+      "key_traits": [
+        "Criaturas evasivas (voar)",
+        "Counters baratos",
+        "Bounce spells",
+        "Pressão + interação"
+      ],
+      "key_card_patterns": [
+        "criaturas evasivas (Delver, Ninja)",
+        "counters baratos (Spell Pierce, Force Spike)",
+        "bounce (Unsubstantiate)"
+      ],
+      "counters": [
+        "Cartas irremovíveis",
+        "Board wipes",
+        "Cards de valor"
+      ],
+      "sub_archetypes": [
+        "Delver of Secrets",
+        "Faeries",
+        "Ninja Tempo"
+      ]
+    }
+  },
+  
+  "identification_signals": {
+    "turn_1_land_red_creature": {
+      "likely": ["aggro"],
+      "possible": ["midrange", "tempo"]
+    },
+    "turn_1_land_forest_ramp_spell": {
+      "likely": ["ramp"],
+      "possible": ["combo"]
+    },
+    "turn_1_land_only": {
+      "likely": ["control"],
+      "possible": ["combo", "midrange"]
+    },
+    "turn_1_cantrip": {
+      "likely": ["tempo", "combo"],
+      "possible": ["control"]
+    },
+    "turn_2_thoughtseize": {
+      "likely": ["midrange", "combo"],
+      "possible": ["control"]
+    },
+    "turn_2_counterspell": {
+      "likely": ["control", "tempo"],
+      "possible": ["combo"]
+    },
+    "turn_2_second_creature": {
+      "likely": ["aggro"],
+      "possible": ["midrange"]
+    },
+    "turn_3_wrath_of_god": {
+      "likely": ["control"],
+      "possible": []
+    },
+    "turn_4_uro": {
+      "likely": ["ramp"],
+      "possible": []
+    }
+  }
+}
