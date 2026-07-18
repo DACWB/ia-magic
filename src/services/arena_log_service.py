@@ -388,6 +388,8 @@ class LeitorDeLogArena:
         Args:
             turno: O conteúdo de `turnInfo`.
         """
+        turno_anterior = self.estado.turno
+
         if "turnNumber" in turno:
             self.estado.turno = turno["turnNumber"]
         if "phase" in turno:
@@ -396,6 +398,30 @@ class LeitorDeLogArena:
             self.estado.etapa = turno["step"]
         if "activePlayer" in turno:
             self.estado.jogador_ativo = turno["activePlayer"]
+
+        # Limpa as marcas de combate quando o combate acaba.
+        #
+        # Isto NÃO é zelo excessivo: o Arena só escreve `attackState` quando
+        # alguém ataca. Não existe um "AttackState_None" — conferido no log
+        # real, que só traz `AttackState_Declared` e `AttackState_Attacking`.
+        # Ou seja, a marca sobe e nunca desce sozinha.
+        #
+        # Sem esta limpeza, a criatura fica "atacando" para sempre. Num teste
+        # de replay, um Charmed Stray apareceu como atacante em 255 leituras
+        # seguidas, muito depois do combate ter terminado. O sistema acharia
+        # que você está sob ataque a partida inteira e ficaria recalculando
+        # conselho de bloqueio sem parar — erro de leitura E queima de token.
+        mudou_de_turno = self.estado.turno != turno_anterior
+        fora_de_combate = bool(self.estado.fase) and "Combat" not in self.estado.fase
+
+        if mudou_de_turno or fora_de_combate:
+            self._limpar_marcas_de_combate()
+
+    def _limpar_marcas_de_combate(self) -> None:
+        """Tira o estado de atacando/bloqueando de todas as cartas."""
+        for carta in self.estado.cartas.values():
+            carta.atacando = False
+            carta.bloqueando = False
 
     def _aplicar_objetos(self, objetos: list[dict[str, Any]]) -> None:
         """Atualiza as cartas: onde estão, quem controla, poder atual.

@@ -343,12 +343,68 @@ class GameState(BaseModel):
         return contagem
 
     def criaturas_que_podem_atacar(self) -> list[CartaEmJogo]:
-        """Minhas criaturas aptas a atacar neste turno.
+        """Minhas criaturas aptas a atacar AGORA.
+
+        Além de estarem desviradas e sem enjoo, é preciso ser o meu turno —
+        ninguém ataca no turno do adversário. Sem essa checagem, o sistema
+        informava à IA que havia atacantes disponíveis durante o turno do
+        oponente, o que é impossível pelas regras.
+
+        Quando não se sabe de quem é o turno (estado ainda incompleto), a
+        função é permissiva: melhor listar demais do que esconder uma opção
+        real do jogador.
 
         Returns:
-            Criaturas desviradas e sem enjoo de invocação.
+            Criaturas que podem declarar ataque neste momento.
         """
+        if self.jogador_ativo is not None and self.meu_seat is not None:
+            if self.jogador_ativo != self.meu_seat:
+                return []
         return [c for c in self.meu_campo if c.pode_atacar]
+
+    def atacantes_do_oponente(self) -> list[CartaEmJogo]:
+        """Criaturas do oponente que estão atacando agora.
+
+        Returns:
+            As criaturas com estado de ataque declarado.
+        """
+        return [c for c in self.campo_oponente if c.atacando]
+
+    def minhas_criaturas_desviradas(self) -> list[CartaEmJogo]:
+        """Minhas criaturas aptas a bloquear.
+
+        Enjoo de invocação NÃO impede bloquear — só atacar. Uma criatura
+        jogada neste turno bloqueia normalmente.
+
+        Returns:
+            Minhas criaturas desviradas.
+        """
+        return [c for c in self.meu_campo if c.eh_criatura and not c.virada]
+
+    def preciso_decidir_bloqueio(self) -> bool:
+        """Se há um ataque contra mim e eu tenho escolha de bloqueio.
+
+        Bloquear é uma das decisões mais caras de errar em Magic, e acontece
+        no turno do OPONENTE. Qualquer filtro que só considere "meu turno"
+        deixa o copiloto mudo bem na hora que ele mais serviria.
+
+        Returns:
+            True se há atacante e eu tenho pelo menos um bloqueador.
+        """
+        return bool(self.atacantes_do_oponente() and self.minhas_criaturas_desviradas())
+
+    def ha_algo_a_decidir(self) -> bool:
+        """Se existe qualquer decisão minha em aberto neste momento.
+
+        Returns:
+            True se tenho carta na mão, criatura apta a atacar, ou preciso
+            decidir bloqueio.
+        """
+        return bool(
+            self.minha_mao
+            or self.criaturas_que_podem_atacar()
+            or self.preciso_decidir_bloqueio()
+        )
 
     def criaturas_que_podem_bloquear(self) -> list[CartaEmJogo]:
         """Criaturas do oponente que podem bloquear meu ataque.

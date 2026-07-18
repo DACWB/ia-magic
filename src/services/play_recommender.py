@@ -159,7 +159,11 @@ class RecomendadorDeJogada:
             A recomendação, ou None se não há nada a decidir (mão vazia e
             nenhuma criatura apta a atacar).
         """
-        if not estado.minha_mao and not estado.criaturas_que_podem_atacar():
+        # `ha_algo_a_decidir` inclui a decisão de BLOQUEIO, que acontece no
+        # turno do oponente e com a mão possivelmente vazia. A versão antiga
+        # desta guarda só olhava mão e atacantes, e por isso o sistema ficava
+        # mudo justamente na hora de bloquear.
+        if not estado.ha_algo_a_decidir():
             return None
 
         assinatura = self._assinatura(estado)
@@ -202,7 +206,11 @@ class RecomendadorDeJogada:
         Returns:
             O conselho, ou None se não há nada a decidir.
         """
-        if not estado.minha_mao and not estado.criaturas_que_podem_atacar():
+        # `ha_algo_a_decidir` inclui a decisão de BLOQUEIO, que acontece no
+        # turno do oponente e com a mão possivelmente vazia. A versão antiga
+        # desta guarda só olhava mão e atacantes, e por isso o sistema ficava
+        # mudo justamente na hora de bloquear.
+        if not estado.ha_algo_a_decidir():
             return None
 
         assinatura = "rapido|" + self._assinatura(estado)

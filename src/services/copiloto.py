@@ -115,11 +115,10 @@ class Copiloto:
         """Se existe alguma jogada possível agora.
 
         Returns:
-            True se há carta na mão ou criatura apta a atacar.
+            True se há carta na mão, criatura apta a atacar, ou bloqueio a
+            decidir.
         """
-        return bool(
-            self.estado.minha_mao or self.estado.criaturas_que_podem_atacar()
-        )
+        return self.estado.ha_algo_a_decidir()
 
     def e_meu_turno(self) -> bool:
         """Se o turno é do jogador local.
@@ -132,12 +131,44 @@ class Copiloto:
             and self.estado.jogador_ativo == self.estado.meu_seat
         )
 
+    def estou_sendo_atacado(self) -> bool:
+        """Se o oponente declarou ataque e eu preciso decidir bloqueios.
+
+        Existe porque a primeira versão do filtro de custo só calculava no
+        MEU turno — e isso deixava o sistema mudo justamente na decisão mais
+        cara de errar em Magic: quem bloqueia o quê.
+
+        Bloquear acontece no turno DELE. Um copiloto que só fala no seu turno
+        perde metade das decisões importantes da partida.
+
+        Returns:
+            True se há criatura dele atacando e eu tenho com que bloquear.
+        """
+        alguem_atacando = any(
+            carta.atacando for carta in self.estado.campo_oponente
+        )
+        if not alguem_atacando:
+            return False
+
+        # Só vale conselho se eu tiver escolha. Sem bloqueador, não há decisão.
+        tenho_bloqueador = any(
+            carta.eh_criatura and not carta.virada
+            for carta in self.estado.meu_campo
+        )
+        return tenho_bloqueador
+
     def vale_a_pena_calcular(self) -> bool:
         """Se este momento merece uma chamada de IA.
+
+        Dois momentos valem:
+        1. Meu turno com algo a fazer (baixar carta, atacar)
+        2. Estou sendo atacado e tenho como bloquear
 
         Returns:
             True se vale gastar.
         """
+        if self.estou_sendo_atacado():
+            return True
         return self.e_meu_turno() and self.ha_decisao_a_tomar()
 
     def _assinatura(self) -> str:
