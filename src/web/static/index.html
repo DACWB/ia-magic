@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<title>Magic AI Advisor</title>
+<style>
+  /* Desenhado pra ser lido de RELANCE, com o celular ao lado do teclado.
+     Por isso: fundo escuro (não ofusca na penumbra), fonte grande, e o
+     conselho ocupando o topo — é a única coisa que importa no meio do turno. */
+  :root {
+    --fundo: #0d1117;
+    --caixa: #161b22;
+    --borda: #30363d;
+    --texto: #e6edf3;
+    --fraco: #8b949e;
+    --verde: #3fb950;
+    --vermelho: #f85149;
+    --azul: #58a6ff;
+    --amarelo: #d29922;
+    --roxo: #bc8cff;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; padding: 12px;
+    background: var(--fundo); color: var(--texto);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px; line-height: 1.45;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+
+  /* Placar fixo no topo: vida e mana são consultados o tempo todo */
+  .placar {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--fundo);
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    padding: 8px 0 10px; margin-bottom: 10px;
+    border-bottom: 1px solid var(--borda);
+  }
+  .chip {
+    background: var(--caixa); border: 1px solid var(--borda);
+    border-radius: 999px; padding: 5px 13px;
+    font-size: 14px; white-space: nowrap;
+  }
+  .vida-minha { color: var(--verde); font-weight: 700; }
+  .vida-dele { color: var(--vermelho); font-weight: 700; }
+  .meu-turno { background: #1a3a1f; border-color: var(--verde); color: var(--verde); font-weight: 700; }
+
+  .caixa {
+    background: var(--caixa); border: 1px solid var(--borda);
+    border-radius: 12px; padding: 14px; margin-bottom: 12px;
+  }
+  .caixa h2 {
+    margin: 0 0 10px; font-size: 13px; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--fraco); font-weight: 600;
+  }
+
+  /* O conselho é o herói da tela */
+  .conselho { border-color: var(--verde); border-width: 2px; }
+  .conselho .acao { font-size: 21px; font-weight: 700; color: var(--verde); }
+  .conselho .motivo { color: var(--fraco); margin-top: 8px; font-size: 15px; }
+  .conselho .tempo { color: var(--fraco); font-size: 12px; margin-top: 10px; }
+  .alerta {
+    background: #3d1d1d; border: 1px solid var(--vermelho);
+    border-radius: 8px; padding: 10px; margin-bottom: 10px;
+    color: #ffb4ab; font-weight: 600;
+  }
+  .combate {
+    margin-top: 12px; padding: 9px 12px; border-radius: 8px;
+    font-weight: 700; display: inline-block;
+  }
+  .atacar { background: #1a3a4a; color: var(--azul); }
+  .nao-atacar { background: #3a2f1a; color: var(--amarelo); }
+
+  ul.cartas { list-style: none; margin: 0; padding: 0; }
+  ul.cartas li {
+    padding: 5px 0; border-bottom: 1px solid #21262d;
+    display: flex; justify-content: space-between; gap: 10px; align-items: baseline;
+  }
+  ul.cartas li:last-child { border-bottom: none; }
+  .pt { color: var(--fraco); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .marca { font-size: 11px; color: var(--fraco); }
+  .marca.atk { color: var(--vermelho); }
+  .terreno { opacity: .55; }
+  .vazio { color: var(--fraco); font-style: italic; }
+
+  .colunas { display: grid; gap: 12px; }
+  @media (min-width: 780px) { .colunas { grid-template-columns: 1fr 1fr; } }
+
+  .botoes { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  button {
+    flex: 1 1 auto; min-width: 128px; min-height: 46px;
+    background: var(--caixa); color: var(--texto);
+    border: 1px solid var(--borda); border-radius: 10px;
+    padding: 11px 14px; font-size: 15px; font-weight: 600; cursor: pointer;
+  }
+  button:active { background: #21262d; }
+  button.ligado { border-color: var(--verde); color: var(--verde); }
+
+  .rodape { color: var(--fraco); font-size: 12px; text-align: center; padding: 10px 0; }
+  .desconectado {
+    background: var(--vermelho); color: #fff; text-align: center;
+    padding: 9px; border-radius: 8px; margin-bottom: 12px; font-weight: 600;
+  }
+  .pensando { color: var(--amarelo); }
+  .barra-oponente { color: var(--roxo); }
+</style>
+</head>
+<body>
+
+<div id="desconectado" class="desconectado" style="display:none">
+  Sem conexão com o servidor — tentando reconectar…
+</div>
+
+<div class="placar">
+  <span class="chip" id="c-jogo">—</span>
+  <span class="chip" id="c-turno">—</span>
+  <span class="chip" id="c-vidas">—</span>
+  <span class="chip" id="c-mana">—</span>
+  <span class="chip" id="c-fase">—</span>
+</div>
+
+<div class="botoes">
+  <button id="b-conselho">⚡ Conselho</button>
+  <button id="b-oponente">🔍 Oponente</button>
+  <button id="b-completa">📋 Completa</button>
+  <button id="b-auto">🤖 Auto</button>
+</div>
+
+<div class="caixa conselho" id="caixa-conselho">
+  <h2>Conselho</h2>
+  <div id="conselho-vazio" class="vazio">Aguardando sua vez de decidir…</div>
+  <div id="conselho-conteudo" style="display:none">
+    <div class="alerta" id="conselho-alerta" style="display:none"></div>
+    <div class="acao" id="conselho-acao"></div>
+    <div class="motivo" id="conselho-motivo"></div>
+    <div id="conselho-combate"></div>
+    <div class="tempo" id="conselho-tempo"></div>
+  </div>
+</div>
+
+<div class="caixa" id="caixa-oponente" style="display:none">
+  <h2 class="barra-oponente">Deck do oponente</h2>
+  <div id="oponente-conteudo"></div>
+</div>
+
+<div class="caixa" id="caixa-completa" style="display:none">
+  <h2>Análise completa</h2>
+  <div id="completa-conteudo"></div>
+</div>
+
+<div class="colunas">
+  <div class="caixa"><h2>🖐️ Minha mão</h2><ul class="cartas" id="lista-mao"></ul></div>
+  <div class="caixa"><h2>⚔️ Meu campo</h2><ul class="cartas" id="lista-campo"></ul></div>
+  <div class="caixa"><h2>👹 Campo do oponente</h2><ul class="cartas" id="lista-dele"></ul></div>
+  <div class="caixa"><h2>🪦 Cemitério dele</h2><ul class="cartas" id="lista-cemiterio"></ul></div>
+</div>
+
+<div class="rodape" id="rodape">conectando…</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let socket = null;
+
+function conectar() {
+  const protocolo = location.protocol === "https:" ? "wss" : "ws";
+  socket = new WebSocket(`${protocolo}://${location.host}/ws`);
+
+  socket.onopen = () => { $("desconectado").style.display = "none"; };
+  socket.onmessage = (evento) => desenhar(JSON.parse(evento.data));
+  socket.onclose = () => {
+    $("desconectado").style.display = "block";
+    // Reconecta sozinho: o celular fecha a conexão ao bloquear a tela, e
+    // seria péssimo ter que recarregar a página no meio de uma partida.
+    setTimeout(conectar, 1500);
+  };
+}
+
+function mandar(comando) {
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ comando }));
+  }
+}
+
+$("b-conselho").onclick = () => mandar("conselho");
+$("b-oponente").onclick = () => mandar("oponente");
+$("b-completa").onclick = () => mandar("completa");
+$("b-auto").onclick = () => mandar("automatico");
+
+function listaDeCartas(elemento, cartas) {
+  if (!cartas.length) {
+    elemento.innerHTML = '<li class="vazio">(vazio)</li>';
+    return;
+  }
+  elemento.innerHTML = cartas.map((c) => {
+    const marcas = [];
+    if (c.virada) marcas.push('<span class="marca">virada</span>');
+    if (c.enjoada) marcas.push('<span class="marca">enjoada</span>');
+    if (c.atacando) marcas.push('<span class="marca atk">atacando</span>');
+    const pt = c.poder ? `<span class="pt">${c.poder}/${c.resistencia}</span>` : "";
+    const classe = c.terreno ? ' class="terreno"' : "";
+    return `<li${classe}><span>${c.nome} ${marcas.join(" ")}</span>${pt}</li>`;
+  }).join("");
+}
+
+function desenhar(d) {
+  $("c-jogo").textContent = `Jogo ${d.jogo}`;
+  $("c-turno").textContent = `Turno ${d.turno}`;
+  $("c-vidas").innerHTML =
+    `<span class="vida-minha">${d.minha_vida}</span> × <span class="vida-dele">${d.vida_oponente}</span>`;
+
+  const mana = Object.entries(d.mana)
+    .filter(([cor]) => cor !== "total")
+    .map(([cor, n]) => `${n}${cor === "incolor" ? "◇" : cor}`)
+    .join(" ");
+  $("c-mana").textContent = `Mana: ${mana || "0"}`;
+
+  const fase = $("c-fase");
+  fase.textContent = d.meu_turno ? "SEU TURNO" : (d.fase || "—");
+  fase.className = d.meu_turno ? "chip meu-turno" : "chip";
+
+  // Conselho
+  const temConselho = d.conselho && d.conselho.acao;
+  $("conselho-vazio").style.display = temConselho ? "none" : "block";
+  $("conselho-conteudo").style.display = temConselho ? "block" : "none";
+
+  if (!temConselho) {
+    $("conselho-vazio").textContent = d.calculando
+      ? "Pensando…"
+      : (d.meu_turno ? "Aguardando o board estabilizar…" : "Turno do oponente.");
+    $("conselho-vazio").className = d.calculando ? "pensando" : "vazio";
+  } else {
+    const c = d.conselho;
+    $("conselho-acao").textContent = c.acao;
+    $("conselho-motivo").textContent = c.motivo;
+
+    const alerta = $("conselho-alerta");
+    alerta.style.display = c.alerta ? "block" : "none";
+    alerta.textContent = c.alerta ? `🚨 ${c.alerta}` : "";
+
+    const combate = $("conselho-combate");
+    if (c.atacar === true) {
+      combate.innerHTML = '<div class="combate atacar">⚔ ATACAR</div>';
+    } else if (c.atacar === false) {
+      combate.innerHTML = '<div class="combate nao-atacar">🛡 NÃO atacar</div>';
+    } else {
+      combate.innerHTML = "";
+    }
+
+    $("conselho-tempo").textContent =
+      `${c.segundos}s${d.calculando ? " · recalculando…" : ""}`;
+  }
+
+  // Oponente
+  if (d.oponente) {
+    $("caixa-oponente").style.display = "block";
+    const o = d.oponente;
+    const ameacas = o.ameacas.length
+      ? "<div style='margin-top:10px'><b>Ameaças:</b> " +
+        o.ameacas.map((a) => `${a.carta} (${Math.round(a.probabilidade * 100)}%)`).join(", ") +
+        "</div>"
+      : "";
+    $("oponente-conteudo").innerHTML =
+      `<div style="font-size:18px;font-weight:700">${o.nome}</div>
+       <div style="color:var(--fraco);margin:6px 0">
+         ${Math.round(o.confianca * 100)}% · ${o.arquetipo} ${o.cores.join("/")}
+       </div>
+       <div style="color:var(--fraco);font-size:14px">${o.raciocinio}</div>${ameacas}`;
+  }
+
+  // Análise completa
+  if (d.completa) {
+    $("caixa-completa").style.display = "block";
+    const k = d.completa;
+    const passos = k.sequencia.map((j) =>
+      `<li style="margin-bottom:10px">
+         <b>${j.prioridade}. ${j.acao}</b>
+         <div style="color:var(--fraco);font-size:14px">${j.motivo}</div>
+         ${j.risco ? `<div style="color:var(--amarelo);font-size:13px">⚠ ${j.risco}</div>` : ""}
+       </li>`).join("");
+    $("completa-conteudo").innerHTML =
+      `<div style="font-weight:700;margin-bottom:10px">${k.resumo}</div>
+       <ul style="padding-left:18px;margin:0">${passos}</ul>
+       ${k.motivo_ataque ? `<div style="margin-top:10px;color:var(--fraco);font-size:14px">${k.motivo_ataque}</div>` : ""}`;
+  }
+
+  listaDeCartas($("lista-mao"), d.minha_mao);
+  listaDeCartas($("lista-campo"), d.meu_campo);
+  listaDeCartas($("lista-dele"), d.campo_oponente);
+  listaDeCartas($("lista-cemiterio"), d.cemiterio_oponente);
+
+  $("b-auto").className = d.automatico ? "ligado" : "";
+
+  const g = d.gasto;
+  $("rodape").textContent =
+    `${g.chamadas} chamada(s) · ${(g.tokens_entrada + g.tokens_saida).toLocaleString("pt-BR")} tokens` +
+    (d.erro ? ` · erro: ${d.erro}` : "");
+}
+
+conectar();
+</script>
+</body>
+</html>

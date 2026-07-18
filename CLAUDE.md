@@ -42,7 +42,11 @@ magic-ai-advisor/
 - **SQLAlchemy** (ORM)
 
 **NUNCA usar**:
-- Web UI (usuário pediu texto)
+- ~~Web UI (usuário pediu texto)~~ — **regra revogada em 18/07/2026**, pelo
+  próprio jogador. Motivo: ele tem UM monitor (2560×1440), e qualquer janela na
+  mesma tela disputa espaço com o Arena. Um servidor local resolve porque pode
+  ser aberto **no celular**, ao lado do teclado, sem ocupar um pixel do jogo.
+  O painel do terminal continua existindo e funcionando.
 - Cloud database (SQLite local é suficiente)
 - Docker (rodar direto no PC)
 
@@ -330,8 +334,26 @@ Anotações:
 
 **PRÓXIMO PASSO**: Dia 2 (Scryfall) ou Dia 5 (IA). A percepção já está pronta.
 
+## 🌐 Painel web (para usar no celular)
+
+```bash
+venv\Scripts\python.exe -m src.main --web
+```
+
+- Neste PC: `http://localhost:8000`
+- No celular: `http://192.168.x.x:8000` (mesmo Wi-Fi)
+
+**Arquitetura**: `src/services/copiloto.py` é o motor — lê o log, decide quando
+vale gastar chamada de IA, calcula em segundo plano. O painel do terminal e o
+web **compartilham esse motor**, senão viram dois sistemas divergentes.
+
+O servidor escuta em `0.0.0.0` (necessário pro celular). Sem senha. Só trafega
+estado de partida e conselho; a chave da API nunca sai do processo do servidor
+— travado por `test_pacote_nunca_vaza_a_chave_da_api`. Use em rede doméstica.
+
 **Comandos**:
 ```bash
+venv\Scripts\python.exe -m src.main --web        # painel no navegador/celular
 venv\Scripts\python.exe -m src.main              # diagnóstico
 venv\Scripts\python.exe -m src.main --partida    # partida atual do log
 venv\Scripts\python.exe -m src.main --acompanhar # ao vivo, Ctrl+C pra sair

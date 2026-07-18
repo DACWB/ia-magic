@@ -397,7 +397,8 @@ def mostrar_ajuda() -> None:
     tabela.add_column("Comando", style="bold cyan")
     tabela.add_column("O que faz")
 
-    tabela.add_row("python -m src.main", "Abre o PAINEL em modo AUTOMÁTICO")
+    tabela.add_row("python -m src.main --web", "Painel no NAVEGADOR e no CELULAR")
+    tabela.add_row("python -m src.main", "Painel no terminal (automático)")
     tabela.add_row("python -m src.main draft", "Painel calibrado pra Draft")
     tabela.add_row("python -m src.main --manual", "Painel só respondendo a teclas")
     tabela.add_row("", "")
@@ -425,6 +426,13 @@ if __name__ == "__main__":
 
     if "--ajuda" in argumentos or "-h" in argumentos or "--help" in argumentos:
         mostrar_ajuda()
+    elif "--web" in argumentos:
+        from src.web.server import rodar
+
+        formato_web = next(
+            (a for a in argumentos if a.lower() in FORMATOS_CONHECIDOS), "standard"
+        )
+        rodar(formato=formato_web, automatico="--manual" not in argumentos)
     elif "--diagnostico" in argumentos:
         mostrar_diagnostico()
     elif "--acompanhar" in argumentos:
