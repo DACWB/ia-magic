@@ -146,14 +146,63 @@ class Card(BaseModel):
 - `DATABASE_PATH` relativo do `.env` é resolvido para absoluto em `config.py`,
   ancorado na raiz do projeto — senão rodar de outra pasta cria um banco vazio novo
 
-**PENDÊNCIA DO USUÁRIO**: colar a `ANTHROPIC_API_KEY` real no `.env`.
-Enquanto não colar, `test_chave_api_presente` falha de propósito.
+**Feito no Dia 3** (leitura do log do Arena — ver mudança de arquitetura abaixo):
+- `src/services/arena_paths.py` — localiza log/instalação/banco do Arena
+- `src/services/arena_card_db.py` — `grpId` → nome en/pt (SQLite do jogo, read-only)
+- `src/services/arena_log_service.py` — parser incremental do `Player.log`
+- `src/models/game_state.py` — `GameState`, `CartaEmJogo`, `Zona`, `Jogador`
+- `tests/test_day3.py` — 12 testes (16 no total, todos passando)
+- `src/main.py --partida` e `--acompanhar` (ao vivo)
 
-**PRÓXIMO PASSO**: Dia 2 do ROADMAP (SQLite + import bulk do Scryfall).
+## 🔄 MUDANÇA DE ARQUITETURA — sem OBS, sem OCR
+
+**Decisão de 18/07/2026.** Os Dias 3 (OBS) e 4 (Claude Vision) do roadmap
+original foram **substituídos pela leitura do `Player.log` do MTG Arena**.
+
+**Por quê**: o Arena grava o estado completo da partida em JSON com o `grpId`
+numérico de cada carta, e instala junto um SQLite de 26 mil cartas com nomes
+em 9 idiomas. OCR custaria ~150k tokens/partida pra descobrir o que o log já
+entrega pronto.
+
+| | OCR (plano antigo) | Log (atual) |
+|---|---|---|
+| Tokens na percepção | ~150.000/partida | **0** |
+| Precisão do nome | erra em fonte estilizada | **100% (ID numérico)** |
+| Latência | 2-5s | **milissegundos** |
+| OBS Studio | obrigatório | **desnecessário** |
+| Jogar em português | atrapalhava | **irrelevante** |
+
+**Pré-requisito**: `Ajustes → Conta → Registros detalhados (suporte de plugin)`
+ligado dentro do Arena.
+
+**Onde fica o log**: `%USERPROFILE%\AppData\LocalLow\Wizards Of The Coast\MTGA\Player.log`
+**Onde fica o Arena (neste PC)**: `D:\Steam\steamapps\common\MTGA`
+(detectado automaticamente pela linha `Mono path[0]` do próprio log)
+
+### Armadilhas do parser (já resolvidas — material de aula)
+1. Mensagens são **incrementais** (`GameStateType_Diff`) — acumular, não sobrescrever
+2. **Vários jogos no mesmo log**; cada `GameStateType_Full` inicia um novo, e
+   **os assentos trocam entre jogos**
+3. `systemSeatIds` é lista de **destinatários**, não "meu assento" — usar de
+   qual assento partem as ações do cliente (maioria)
+4. Chaves em string (`"{2}{R}{R}"`) quebram extrator de JSON ingênuo
+5. **Vida pode ser negativa** (jogador terminou em -3)
+
+## 📌 Pendências
+
+- [ ] **Reiniciar o Arena** uma vez pra capturar a coleção do jogador
+  (`PlayerInventory.GetPlayerCardsV3` só é logado no login). Isso torna o
+  `data/minhas-cartas.csv` manual desnecessário.
+- [ ] Dia 2: SQLite do projeto + Scryfall (oracle text, sinergias, arquétipos).
+  O `grpId` do Arena é a ponte pro Scryfall.
+
+**PRÓXIMO PASSO**: Dia 2 (Scryfall) ou Dia 5 (IA). A percepção já está pronta.
 
 **Comandos**:
 ```bash
 venv\Scripts\python.exe -m src.main              # diagnóstico
+venv\Scripts\python.exe -m src.main --partida    # partida atual do log
+venv\Scripts\python.exe -m src.main --acompanhar # ao vivo, Ctrl+C pra sair
 venv\Scripts\python.exe -m pytest tests/ -v      # testes
 ```
 

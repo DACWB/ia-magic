@@ -82,6 +82,13 @@ class Configuracao(BaseSettings):
     claude_max_tokens_recommendation: int = 2500
     claude_temperature: float = 0.3
 
+    # --- Idioma ---
+    # Em qual idioma MOSTRAR as cartas pra você. Não afeta o que é enviado
+    # pra IA: pra ela vai sempre o nome em inglês, porque toda a literatura
+    # estratégica de Magic é em inglês. Como o log traz o `grpId` numérico,
+    # jogar em português não custa nada.
+    idioma_exibicao: Literal["ptBR", "enUS"] = "ptBR"
+
     # --- Aplicação ---
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     debug_mode: bool = False

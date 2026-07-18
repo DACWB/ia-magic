@@ -182,7 +182,57 @@ if __name__ == "__main__":
 
 ---
 
-## 📅 DIA 3: Integração OBS
+## 📅 DIA 3: Leitura do log do Arena ✅ CONCLUÍDO
+
+> **🔄 MUDANÇA DE ARQUITETURA (18/07/2026).** Este dia era "Integração OBS" e
+> o Dia 4 era "OCR + Claude Vision". **Os dois foram substituídos pela leitura
+> do `Player.log` do Arena.**
+>
+> **Motivo:** o Arena grava todo o estado da partida em JSON, com o `grpId`
+> numérico exato de cada carta, e instala junto um SQLite de 26 mil cartas com
+> os nomes em 9 idiomas. Fazer OCR da tela pra descobrir o que o log já entrega
+> pronto custaria ~150.000 tokens por partida, com menos precisão e mais
+> latência.
+>
+> **Ganhos medidos:** 0 tokens na percepção (era ~150k/partida), precisão de
+> 100% no nome da carta (é ID numérico), leitura em milissegundos, OBS
+> desnecessário, e jogar em português passou a ser irrelevante pro sistema.
+>
+> **Pré-requisito:** ligar `Ajustes → Conta → Registros detalhados (suporte de
+> plugin)` dentro do Arena.
+>
+> O código de OBS/Vision abaixo fica como **referência histórica** — não é o
+> que o sistema usa.
+
+### Objetivo
+Reconstruir o `GameState` completo a partir do `Player.log`.
+
+### Entregue
+- `src/services/arena_paths.py` — localiza log, instalação e banco de cartas
+  (descobre a instalação lendo a linha `Mono path[0]` do próprio log)
+- `src/services/arena_card_db.py` — `grpId` → nome em inglês e português,
+  lendo o SQLite do Arena em modo somente-leitura, com cache
+- `src/services/arena_log_service.py` — parser incremental do log
+- `src/models/game_state.py` — `GameState`, `CartaEmJogo`, `Zona`, `Jogador`
+- `tests/test_day3.py` — 12 testes
+
+### Armadilhas que custaram caro (material de aula)
+1. **As mensagens são incrementais** (`GameStateType_Diff`). Um diff real
+   trouxe só `{"activePlayer": 2}` — sem o turno. Parser que sobrescreve em vez
+   de acumular perde o estado.
+2. **Vários jogos no mesmo log.** Cada `GameStateType_Full` é um jogo novo, e
+   **os assentos trocam entre eles**. Sem separar, as cartas do próprio jogador
+   aparecem como sendo do oponente.
+3. **`systemSeatIds` não é "meu assento"** — é a lista de destinatários da
+   mensagem. O sinal certo é de que assento partem as ações do cliente.
+4. **Chaves dentro de string** (`"{2}{R}{R}"`) quebram extrator de JSON
+   ingênuo. Custo de mana aparece o tempo todo.
+5. **Vida pode ser negativa.** O primeiro teste exigia `vida >= 0` e falhou
+   contra o log real (jogador terminou em -3).
+
+---
+
+## 📚 REFERÊNCIA HISTÓRICA: integração OBS (não usada)
 
 ### Objetivo
 Python capturando screenshots do OBS em tempo real.
@@ -262,7 +312,9 @@ if __name__ == "__main__":
 
 ---
 
-## 📅 DIA 4: OCR + GameState
+## 📚 REFERÊNCIA HISTÓRICA: OCR + Claude Vision (não usado)
+
+> Substituído pela leitura do log — ver Dia 3.
 
 ### Objetivo
 Reconhecer cartas dos screenshots e construir GameState.
