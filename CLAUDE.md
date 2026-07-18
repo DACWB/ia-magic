@@ -84,9 +84,37 @@ Quando o jogador pedir pra começar, siga o ROADMAP:
 - Password: definir em `.env`
 
 ### Claude API
-- Modelo principal: `claude-sonnet-4-6`
-- Modelo Vision: `claude-sonnet-4-6` (mesmo, tem vision)
-- Modelo simples: `claude-haiku-4-5` (fallback barato)
+- Modelo principal: **`claude-opus-4-8`** (decisão estratégica: identificar
+  deck, recomendar jogada, sideboard). Poucas chamadas por partida, alto valor.
+- Modelo fallback: `claude-haiku-4-5` (tarefas mecânicas e baratas)
+- ~~Modelo Vision~~: não é mais usado — a percepção vem do log do Arena
+
+⚠️ **Os modelos NÃO aceitam os mesmos parâmetros.** Testado em 18/07/2026:
+
+| Parâmetro | `claude-opus-4-8` | `claude-haiku-4-5` |
+|---|---|---|
+| `temperature` | ❌ erro 400 | ✅ aceita |
+| `thinking: adaptive` | ✅ | — |
+| `output_config.effort` | ✅ | — |
+
+Erro exato ao mandar temperature pro Opus 4.8:
+```
+400 invalid_request_error: `temperature` is deprecated for this model.
+```
+
+**Nunca monte esses parâmetros na mão.** Use sempre:
+```python
+cliente.messages.create(
+    model=config.claude_model_primary,
+    max_tokens=config.claude_max_tokens_recommendation,
+    messages=[...],
+    **config.parametros_de_geracao(),   # escolhe o certo pro modelo
+)
+```
+Coberto por `test_parametros_por_modelo` em `tests/test_day1.py`.
+
+Outro detalhe: com raciocínio adaptativo a resposta pode ter um bloco de
+pensamento ANTES do texto. Use `resposta.content[-1].text`, não `[0]`.
 
 ### SQLite
 - Arquivo: `~/magic-ai/data.db`

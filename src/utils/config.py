@@ -19,6 +19,25 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # Raiz do projeto = duas pastas acima deste arquivo (src/utils/config.py)
 DIRETORIO_RAIZ: Path = Path(__file__).resolve().parents[2]
 
+# Modelos da geração 4.7+ que REMOVERAM os parâmetros de amostragem.
+# Mandar `temperature` pra eles devolve erro 400:
+#     "`temperature` is deprecated for this model."
+#
+# No lugar dela existe o raciocínio adaptativo: em vez de você regular o
+# quanto o modelo "inventa", ele decide sozinho quanto precisa pensar antes
+# de responder, e você regula o ESFORÇO.
+#
+# Testado na prática em 18/07/2026: opus-4-8 recusa temperature,
+# haiku-4-5 ainda aceita. Por isso a checagem é por modelo, não global.
+MODELOS_SEM_TEMPERATURE: frozenset[str] = frozenset(
+    {
+        "claude-opus-4-8",
+        "claude-opus-4-7",
+        "claude-fable-5",
+        "claude-mythos-5",
+    }
+)
+
 # Carrega o .env para as variáveis de ambiente do processo
 load_dotenv(DIRETORIO_RAIZ / ".env")
 
@@ -80,7 +99,14 @@ class Configuracao(BaseSettings):
     claude_model_primary: str = "claude-sonnet-4-6"
     claude_model_fallback: str = "claude-haiku-4-5"
     claude_max_tokens_recommendation: int = 2500
+
+    # Só é usada em modelos antigos (ver MODELOS_SEM_TEMPERATURE).
     claude_temperature: float = 0.3
+
+    # Substitui a temperatura nos modelos novos: regula quanto o modelo pensa
+    # antes de responder. "high" é o equilíbrio bom pra decisão de jogada;
+    # "low" serve pra tarefas mecânicas e sai mais barato.
+    claude_effort: Literal["low", "medium", "high", "xhigh", "max"] = "high"
 
     # --- Idioma ---
     # Em qual idioma MOSTRAR as cartas pra você. Não afeta o que é enviado
@@ -115,6 +141,41 @@ class Configuracao(BaseSettings):
         if caminho.is_absolute():
             return caminho
         return (DIRETORIO_RAIZ / caminho).resolve()
+
+    def parametros_de_geracao(self, modelo: str | None = None) -> dict[str, object]:
+        """Monta os parâmetros de geração corretos para o modelo escolhido.
+
+        Existe porque os modelos não aceitam os mesmos parâmetros, e descobrir
+        isso em produção custa caro: a chamada volta 400 no meio de uma
+        partida, quando você mais precisa da recomendação.
+
+        - Modelos 4.7+ (Opus 4.8, Opus 4.7, Fable 5): sem `temperature`.
+          Usam raciocínio adaptativo e o parâmetro de esforço.
+        - Modelos anteriores (Haiku 4.5, Sonnet 4.6): `temperature` normal.
+
+        Uso:
+            cliente.messages.create(
+                model=config.claude_model_primary,
+                max_tokens=2500,
+                messages=[...],
+                **config.parametros_de_geracao(),
+            )
+
+        Args:
+            modelo: Nome do modelo. Se None, usa o modelo principal do .env.
+
+        Returns:
+            Dicionário pronto pra ser expandido na chamada da API.
+        """
+        alvo = modelo or self.claude_model_primary
+
+        if alvo in MODELOS_SEM_TEMPERATURE:
+            return {
+                "thinking": {"type": "adaptive"},
+                "output_config": {"effort": self.claude_effort},
+            }
+
+        return {"temperature": self.claude_temperature}
 
     def chave_api_configurada(self) -> bool:
         """Diz se a chave da Anthropic foi realmente preenchida.

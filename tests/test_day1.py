@@ -68,6 +68,29 @@ def test_chave_api_presente() -> None:
     print("OK - chave da API presente")
 
 
+def test_parametros_por_modelo() -> None:
+    """Cada modelo recebe os parâmetros que ele aceita.
+
+    Este teste nasceu de um erro real: trocamos o modelo pra Opus 4.8 no .env
+    e a chamada passou a devolver 400 —
+    "`temperature` is deprecated for this model."
+
+    Modelos 4.7+ removeram os parâmetros de amostragem e usam raciocínio
+    adaptativo no lugar. O Haiku, usado como fallback barato, ainda aceita
+    temperature. Ou seja: não dá pra ter uma regra só pro projeto inteiro.
+    """
+    novos = config.parametros_de_geracao("claude-opus-4-8")
+    assert "temperature" not in novos, "Opus 4.8 recusa temperature (erro 400)"
+    assert novos["thinking"] == {"type": "adaptive"}
+    assert "effort" in novos["output_config"]  # type: ignore[operator]
+
+    antigos = config.parametros_de_geracao("claude-haiku-4-5")
+    assert "temperature" in antigos, "Haiku ainda usa temperature"
+    assert "thinking" not in antigos
+
+    print(f"OK - opus-4-8: {sorted(novos)} | haiku-4-5: {sorted(antigos)}")
+
+
 @pytest.mark.skipif(
     not config.chave_api_configurada(),
     reason="Sem chave de API no .env — pulando chamada real",
@@ -75,8 +98,8 @@ def test_chave_api_presente() -> None:
 def test_claude_api_responde() -> None:
     """Faz uma chamada mínima e real à API pra provar que tudo conecta.
 
-    Usa max_tokens baixo de propósito: o objetivo é validar a conexão e a
-    autenticação, não gerar texto.
+    Usa `parametros_de_geracao()` de propósito: assim este teste também prova
+    que os parâmetros escolhidos pro modelo configurado são aceitos de fato.
     """
     from anthropic import Anthropic
 
@@ -84,12 +107,16 @@ def test_claude_api_responde() -> None:
 
     resposta = cliente.messages.create(
         model=config.claude_model_primary,
-        max_tokens=20,
+        max_tokens=1500,
         messages=[{"role": "user", "content": "Responda apenas: pong"}],
+        **config.parametros_de_geracao(),  # type: ignore[arg-type]
     )
 
     assert resposta.content, "A API respondeu, mas sem conteúdo"
-    texto = resposta.content[0].text
+    # Com raciocínio adaptativo a resposta pode vir com um bloco de
+    # pensamento ANTES do texto. Por isso pegamos o último bloco, não o
+    # primeiro — `content[0]` daria erro de atributo nesses modelos.
+    texto = resposta.content[-1].text
 
     print(f"OK - Claude respondeu: {texto.strip()!r}")
     print(f"     tokens: {resposta.usage.input_tokens} entrada / "
@@ -103,6 +130,7 @@ if __name__ == "__main__":
         ("Dependencias instaladas", test_dependencias_instaladas),
         ("Configuracao carregada", test_configuracao_carregada),
         ("Chave da API presente", test_chave_api_presente),
+        ("Parametros por modelo", test_parametros_por_modelo),
         ("Claude API responde", test_claude_api_responde),
     ]
 

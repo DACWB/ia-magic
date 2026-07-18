@@ -315,9 +315,19 @@ def test_identifica_cartas_do_oponente() -> None:
 
 @precisa_do_arena
 def test_leitura_incremental_nao_duplica() -> None:
-    """Chamar ler_novidades() sem log novo não muda nada.
+    """Reler sem novidade no log não pode mudar o estado.
 
-    Se duplicasse, a cada segundo o dashboard mostraria cartas repetidas.
+    Se duplicasse, o dashboard mostraria cartas repetidas a cada segundo.
+
+    CUIDADO COM TESTE INSTÁVEL: a primeira versão deste teste comparava a
+    contagem antes e depois direto. Ele falhou (21 != 22) simplesmente porque
+    o jogador estava jogando naquele instante — o log cresceu no meio do teste
+    e uma carta nova entrou, corretamente.
+
+    O erro era do teste: ele media "o número não mudou" quando a invariante
+    de verdade é "reler o MESMO conteúdo não muda nada". Por isso agora
+    comparamos o tamanho do arquivo e só exigimos estabilidade quando o log
+    de fato não cresceu.
     """
     leitor = LeitorDeLogArena()
     estado = leitor.ler_arquivo_inteiro()
@@ -325,12 +335,27 @@ def test_leitura_incremental_nao_duplica() -> None:
         pytest.skip("Nenhuma partida no log atual.")
 
     antes = len(estado.cartas)
-    leitor.ler_novidades()
-    leitor.ler_novidades()
-    depois = len(leitor.estado.cartas)
+    tamanho_antes = leitor.caminho_log.stat().st_size
 
-    assert antes == depois, f"Duplicou cartas: {antes} -> {depois}"
-    print(f"OK - leitura incremental estável ({antes} cartas)")
+    leitor.ler_novidades()
+    leitor.ler_novidades()
+
+    depois = len(leitor.estado.cartas)
+    tamanho_depois = leitor.caminho_log.stat().st_size
+
+    if tamanho_antes == tamanho_depois:
+        assert antes == depois, f"Duplicou sem log novo: {antes} -> {depois}"
+        print(f"OK - releitura sem novidade é estável ({antes} cartas)")
+    else:
+        # Partida em andamento: pode crescer, mas nunca encolher nem dobrar
+        assert depois >= antes, f"Perdeu cartas: {antes} -> {depois}"
+        assert depois < antes * 2, f"Sinal de duplicação: {antes} -> {depois}"
+        print(f"OK - partida ao vivo, {antes} -> {depois} cartas (sem duplicar)")
+
+    # Invariante que vale sempre: a chave é o instanceId, então nunca pode
+    # haver duas entradas para a mesma carta física.
+    ids = [c.instance_id for c in leitor.estado.cartas.values()]
+    assert len(ids) == len(set(ids)), "instanceId repetido no estado"
 
 
 if __name__ == "__main__":
