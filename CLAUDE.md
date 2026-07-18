@@ -216,6 +216,44 @@ ligado dentro do Arena.
 4. Chaves em string (`"{2}{R}{R}"`) quebram extrator de JSON ingênuo
 5. **Vida pode ser negativa** (jogador terminou em -3)
 
+**Feito no Dia 5** (camada de IA — primeira das 7 funcionalidades):
+- `src/utils/json_solto.py` — extrai JSON de texto solto (serve ao log E às
+  respostas da IA; por isso mora em utils)
+- `src/services/claude_client.py` — camada única de conversa com a IA:
+  parâmetros por modelo, contagem de gasto, leitura de resposta, prompts
+  carregados de `prompts/*.md`
+- `src/services/deck_identifier.py` — identifica o deck do oponente
+- `tests/test_day5.py` — 10 testes (27 no total)
+- `src/main.py --analisar [formato]`
+
+Custo medido: ~1.000 tokens de entrada + ~1.300 de saída por análise.
+
+### Fronteira ética do sistema (decisão de projeto)
+A IA recebe apenas `cartas_reveladas_do_oponente()` — campo, cemitério,
+exílio e pilha. **A mão do oponente nunca entra no prompt**, mesmo em partidas
+contra a máquina onde o log a revela. O sistema é assistente de raciocínio
+sobre informação pública, não raio-x. Travado por
+`test_mao_do_oponente_nunca_entra_na_analise`.
+
+## 🗺️ As 7 funcionalidades pedidas (18/07/2026)
+
+| # | Funcionalidade | Status |
+|---|---|---|
+| 1 | Identificar deck do oponente | ✅ feito |
+| 2 | Ver minhas cartas (coleção) | ⏳ depende de reiniciar o Arena |
+| 3 | Montar decks prévios (Standard, Historic…) | ⏳ depende de #2 |
+| 4 | Recomendar jogada ao vivo (atacar? descer mana? qual magia?) | ⏳ próximo |
+| 5 | Assistente de Draft/Sealed (escolher carta na hora) | ⏳ |
+| 6 | Sideboard entre partidas, aprendendo do jogo anterior | ⏳ |
+| 7 | Brawl (deck de comandante) | ⏳ |
+
+**Fonte de meta escolhida**: conhecimento do Claude + Scryfall (API aberta).
+Sem raspagem de MTGGoldfish — terreno cinzento de termos de uso, e o
+conhecimento do modelo já cobre arquétipos bem.
+
+**Modelo**: `claude-opus-4-8` em tudo. Fable 5 foi testado e funciona na conta,
+mas o jogador optou pelo Opus por ser o patamar durável e mais barato.
+
 ## 📌 Pendências
 
 - [ ] **Reiniciar o Arena** uma vez pra capturar a coleção do jogador

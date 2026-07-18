@@ -25,9 +25,7 @@ cima, como um extrato bancário — cada linha é uma movimentação, e o saldo 
 soma de tudo até agora.
 """
 
-import json
 from collections import Counter
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -42,72 +40,10 @@ from src.models.game_state import (
 from src.services.arena_card_db import BancoDeCartasArena
 from src.services.arena_paths import caminho_do_log
 
-
-def extrair_objetos_json(texto: str) -> Iterator[dict[str, Any]]:
-    """Extrai todo objeto JSON de nível superior de dentro do log.
-
-    O Player.log não é um JSON — é um log de texto com blocos JSON espalhados
-    no meio de mensagens da Unity. Não dá pra fazer `json.loads` no arquivo.
-
-    A solução é varrer o texto contando chaves `{` e `}` até fechar o bloco.
-    O cuidado essencial: ignorar chaves que estejam DENTRO de uma string.
-    Um texto de carta como `"Escolha {R} ou {G}"` derrubaria a contagem
-    ingênua — e no Magic isso aparece o tempo todo, nos custos de mana.
-
-    Args:
-        texto: Conteúdo bruto do log.
-
-    Yields:
-        Cada objeto JSON válido encontrado, já convertido em dicionário.
-    """
-    posicao = 0
-    tamanho = len(texto)
-
-    while posicao < tamanho:
-        if texto[posicao] != "{":
-            posicao += 1
-            continue
-
-        profundidade = 0
-        dentro_de_string = False
-        escapado = False
-        fim_encontrado = False
-
-        for indice in range(posicao, tamanho):
-            caractere = texto[indice]
-
-            # Uma barra invertida faz o próximo caractere perder o sentido
-            # especial — inclusive uma aspa. Sem isso, `"texto \" aqui"`
-            # bagunçaria a contagem de aspas.
-            if escapado:
-                escapado = False
-                continue
-            if caractere == "\\":
-                escapado = True
-                continue
-            if caractere == '"':
-                dentro_de_string = not dentro_de_string
-                continue
-            if dentro_de_string:
-                continue
-
-            if caractere == "{":
-                profundidade += 1
-            elif caractere == "}":
-                profundidade -= 1
-                if profundidade == 0:
-                    trecho = texto[posicao : indice + 1]
-                    try:
-                        yield json.loads(trecho)
-                    except json.JSONDecodeError:
-                        pass  # bloco truncado (log sendo escrito) — segue o baile
-                    posicao = indice + 1
-                    fim_encontrado = True
-                    break
-
-        if not fim_encontrado:
-            # Bloco aberto que nunca fecha: fim do arquivo no meio da escrita
-            break
+# O extrator de JSON solto mora em `utils` porque serve a dois usos bem
+# diferentes: ler o log da Unity e ler as respostas da IA. Reexportado aqui
+# por conveniência de quem já importava deste módulo.
+from src.utils.json_solto import extrair_objetos_json  # noqa: F401
 
 
 def _buscar_recursivo(objeto: Any, chave: str, _profundidade: int = 0) -> Any:

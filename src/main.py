@@ -185,6 +185,81 @@ def mostrar_partida(acompanhar: bool = False) -> None:
         console.print("\n[dim]Encerrado.[/dim]")
 
 
+def analisar_oponente(formato: str = "standard") -> None:
+    """Lê a partida do log e pede à IA pra identificar o deck do oponente.
+
+    Args:
+        formato: Formato do jogo, pra IA calibrar a análise.
+    """
+    from src.services.deck_identifier import IdentificadorDeDeck
+
+    try:
+        leitor = LeitorDeLogArena()
+    except ArenaNaoEncontrado as erro:
+        console.print(Panel(str(erro), title="❌", border_style="red"))
+        return
+
+    estado = leitor.ler_arquivo_inteiro()
+    reveladas = estado.cartas_reveladas_do_oponente()
+
+    if not reveladas:
+        console.print(
+            Panel(
+                "O oponente ainda não revelou nenhuma carta nesta partida.\n"
+                "Nada pra analisar — e não vou gastar chamada de IA à toa.",
+                title="⏳ Cedo demais",
+                border_style="yellow",
+            )
+        )
+        return
+
+    nomes = sorted({c.carta.nome(config.idioma_exibicao) for c in reveladas})
+    console.print(f"[dim]Analisando {len(nomes)} cartas: {', '.join(nomes)}[/dim]\n")
+
+    with console.status("[cyan]Consultando a IA…"):
+        identificador = IdentificadorDeDeck()
+        analise = identificador.identificar(estado, formato=formato)
+
+    principal = analise.principal
+    console.print(
+        Panel(
+            f"[bold]{principal.nome}[/bold]  "
+            f"[dim]({principal.confianca:.0%} de confiança)[/dim]\n\n"
+            f"{principal.raciocinio}",
+            title=f"🔍 Deck do oponente — {principal.arquetipo or '?'} "
+            f"{'/'.join(principal.cores)}",
+            border_style="cyan",
+        )
+    )
+
+    if analise.ameacas:
+        tabela = Table(title="⚠️  Ameaças esperadas", show_header=True)
+        tabela.add_column("Carta")
+        tabela.add_column("Chance", justify="right")
+        tabela.add_column("Turno", justify="right")
+        tabela.add_column("Impacto")
+        for ameaca in analise.ameacas[:5]:
+            tabela.add_row(
+                ameaca.carta,
+                f"{ameaca.probabilidade:.0%}",
+                str(ameaca.turno_esperado or "—"),
+                ameaca.impacto,
+            )
+        console.print(tabela)
+
+    if analise.como_enfrentar:
+        conselhos = "\n".join(f"• {c}" for c in analise.como_enfrentar)
+        console.print(Panel(conselhos, title="💡 Como enfrentar", border_style="green"))
+
+    if analise.alternativas:
+        outras = ", ".join(
+            f"{h.nome} ({h.confianca:.0%})" for h in analise.alternativas[:3]
+        )
+        console.print(f"[dim]Outras hipóteses: {outras}[/dim]")
+
+    console.print(f"[dim]{identificador.cliente.resumo_de_gasto()}[/dim]")
+
+
 def _mostrar_resultado(estado: GameState) -> None:
     """Mostra o resultado da partida, se ela já acabou.
 
@@ -203,9 +278,15 @@ def _mostrar_resultado(estado: GameState) -> None:
 
 if __name__ == "__main__":
     argumentos = sys.argv[1:]
+
     if "--acompanhar" in argumentos:
         mostrar_partida(acompanhar=True)
     elif "--partida" in argumentos:
         mostrar_partida()
+    elif "--analisar" in argumentos:
+        # Formato opcional: --analisar draft
+        posicao = argumentos.index("--analisar")
+        seguinte = argumentos[posicao + 1] if len(argumentos) > posicao + 1 else ""
+        analisar_oponente(formato=seguinte or "standard")
     else:
         mostrar_diagnostico()
