@@ -272,6 +272,42 @@ def test_ficha_das_cartas_entra_no_prompt() -> None:
     print("OK - ficha oficial no prompt, com Haste e Flying corretos")
 
 
+def test_prompt_separa_poder_base_de_poder_atual() -> None:
+    """A ficha traz o poder BASE; o board traz o ATUAL. Não podem se misturar.
+
+    Erro real de 18/07/2026, numa partida do jogador: o Soulblade Djinn estava
+    5/3 no board (base impressa 4/3, com um buff). A IA anunciou "6/4" —
+    inventou um terceiro valor somando as duas fontes.
+
+    Conta de combate errada é o pior tipo de erro aqui: leva a bloquear
+    quando não devia, ou a não atacar quando o ataque era letal.
+    """
+    enviado = {"texto": ""}
+
+    class ClienteEspiao:
+        def perguntar_json(self, sistema: str, usuario: str, **_k: object) -> dict:
+            enviado["texto"] = usuario
+            return {"summary": "x"}
+
+    estado = _estado_de_combate()
+    # Soulblade Djinn: base 4/3 no Scryfall, mas 5/3 em campo (buffado)
+    estado.cartas[50] = _carta(
+        50, "Soulblade Djinn", Zona.CAMPO, 2, ["CardType_Creature"], [],
+        poder="5", resistencia="3",
+    )
+
+    recomendador = RecomendadorDeJogada(cliente=ClienteEspiao())  # type: ignore[arg-type]
+    recomendador.recomendar(estado)
+
+    texto = enviado["texto"]
+
+    assert "ATUAL 5/3" in texto, "O board precisa marcar o valor como ATUAL"
+    assert "base impressa" in texto, "A ficha precisa marcar o valor como BASE"
+    assert "Nunca some os dois" in texto, "Faltou a instrução de não somar"
+
+    print("OK - prompt separa poder base (ficha) de poder atual (board)")
+
+
 def test_texto_de_carta_vem_do_cache_na_segunda_vez() -> None:
     """Buscar a mesma carta duas vezes não pode ir à rede duas vezes."""
     from src.services.scryfall_service import BancoDeTextos

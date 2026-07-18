@@ -212,10 +212,18 @@ class RecomendadorDeJogada:
             return ""
 
         linhas = [
-            "FICHA OFICIAL DAS CARTAS EM JOGO",
-            "(texto de regras verificado — use ESTE texto, não sua memória "
-            "da carta; se uma habilidade não estiver listada aqui, a carta "
-            "NÃO a tem)",
+            "FICHA OFICIAL DAS CARTAS (texto de regras verificado)",
+            "",
+            "COMO USAR ESTA SEÇÃO:",
+            "1. O TEXTO DE REGRAS aqui é a verdade. Use ele, não sua memória "
+            "da carta. Se uma habilidade não estiver listada, a carta NÃO a tem.",
+            "2. O poder/resistência aqui é o BASE IMPRESSO. Ele NÃO vale pra "
+            "conta de combate.",
+            "   Para combate, use SEMPRE o poder/resistência que aparece na "
+            "descrição do board mais abaixo — aquele é o valor ATUAL, já com "
+            "todos os buffs, auras e efeitos aplicados.",
+            "   Exemplo do erro a evitar: se a ficha diz 4/3 e o board diz 5/3, "
+            "a criatura É 5/3. Nunca some os dois, nunca invente um terceiro valor.",
             "",
         ]
         for nome in nomes:
@@ -223,8 +231,21 @@ class RecomendadorDeJogada:
             if ficha is None:
                 linhas.append(f"- {nome}: (texto não encontrado — seja cauteloso)")
                 continue
-            palavras = f" [keywords: {', '.join(ficha.keywords)}]" if ficha.keywords else ""
-            linhas.append(f"- {ficha.resumo()}{palavras}")
+
+            partes = [ficha.nome]
+            if ficha.custo:
+                partes.append(ficha.custo)
+            if ficha.tipo:
+                partes.append(f"— {ficha.tipo}")
+            cabecalho = " ".join(partes)
+
+            if ficha.poder:
+                cabecalho += f" (base impressa: {ficha.poder}/{ficha.resistencia})"
+            if ficha.keywords:
+                cabecalho += f" [keywords: {', '.join(ficha.keywords)}]"
+
+            corpo = f": {ficha.texto.replace(chr(10), ' / ')}" if ficha.texto else ""
+            linhas.append(f"- {cabecalho}{corpo}")
 
         return "\n".join(linhas)
 
@@ -259,7 +280,10 @@ class RecomendadorDeJogada:
             for c in cartas:
                 texto = c.carta.nome_en
                 if c.poder_atual:
-                    texto += f" ({c.poder_atual}/{c.resistencia_atual}"
+                    # "ATUAL" explícito porque a ficha do Scryfall traz o valor
+                    # base impresso, e a IA já confundiu os dois: chamou de 6/4
+                    # uma criatura de base 4/3 que estava 5/3 no board.
+                    texto += f" (ATUAL {c.poder_atual}/{c.resistencia_atual}"
                     if c.dano:
                         texto += f", {c.dano} de dano marcado"
                     texto += ")"

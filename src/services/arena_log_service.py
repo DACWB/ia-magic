@@ -251,6 +251,35 @@ class LeitorDeLogArena:
         self._aplicar_turno(mensagem.get("turnInfo", {}))
         self._aplicar_objetos(mensagem.get("gameObjects", []))
 
+    def todos_os_jogos(self) -> list[GameState]:
+        """Todos os jogos da sessão, o atual por último.
+
+        Returns:
+            Lista de jogos em ordem cronológica.
+        """
+        return [*self.jogos_anteriores, self.estado]
+
+    def ultimo_jogo_encerrado(self) -> GameState | None:
+        """O jogo mais recente que TERMINOU de verdade.
+
+        Existe por causa de um erro real: o analisador pós-jogo pegou o jogo
+        em andamento (turno 7, vida 18×20) achando que era o que tinha
+        acabado, e produziu uma análise confiante de uma partida que ainda
+        estava sendo jogada.
+
+        A regra: só é jogo encerrado o que tem `resultado` preenchido pelo
+        `finalMatchResult` do log.
+
+        RESSALVA CONHECIDA: numa série melhor-de-3, o log traz o
+        `finalMatchResult` no fim da PARTIDA, não de cada jogo. Então jogos
+        intermediários podem ficar sem resultado mesmo tendo acabado.
+
+        Returns:
+            O último jogo encerrado, ou None se nenhum terminou ainda.
+        """
+        encerrados = [j for j in self.todos_os_jogos() if j.resultado is not None]
+        return encerrados[-1] if encerrados else None
+
     def _registrar_assento(self, objeto: dict[str, Any]) -> None:
         """Descobre de que lado da mesa o jogador local está.
 
