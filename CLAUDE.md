@@ -12,8 +12,8 @@ Sistema de IA em tempo real para MTG Arena. Assiste o jogador:
 
 ## 👤 Usuário
 
-**Usuário** - Médico oftalmologista, professor de IA aplicada à medicina (o projeto didático).  
-Este projeto tem propósito duplo: (1) jogar Magic melhor, (2) material didático de ML/AI aplicado.
+Médico e professor de IA aplicada à medicina. O projeto tem propósito duplo:
+(1) jogar Magic melhor, (2) servir de material didático de ML/IA aplicado.
 
 **Estilo de trabalho**: TDAH, agilidade, MVP rápido, código didático em português.
 
@@ -43,7 +43,7 @@ magic-ai-advisor/
 
 **NUNCA usar**:
 - ~~Web UI (usuário pediu texto)~~ — **regra revogada em 18/07/2026**, pelo
-  próprio jogador. Motivo: ele tem UM monitor (2560×1440), e qualquer janela na
+  próprio usuário. Motivo: ele tem UM monitor (2560×1440), e qualquer janela na
   mesma tela disputa espaço com o Arena. Um servidor local resolve porque pode
   ser aberto **no celular**, ao lado do teclado, sem ocupar um pixel do jogo.
   O painel do terminal continua existindo e funcionando.
@@ -208,8 +208,9 @@ entrega pronto.
 ligado dentro do Arena.
 
 **Onde fica o log**: `%USERPROFILE%\AppData\LocalLow\Wizards Of The Coast\MTGA\Player.log`
-**Onde fica o Arena (neste PC)**: `D:\Steam\steamapps\common\MTGA`
-(detectado automaticamente pela linha `Mono path[0]` do próprio log)
+**Onde fica o Arena**: varia por instalação (Steam, Epic, instalador da Wizards).
+Não precisa configurar — `arena_paths.py` descobre sozinho lendo a linha
+`Mono path[0]` do próprio log.
 
 ### Armadilhas do parser (já resolvidas — material de aula)
 1. Mensagens são **incrementais** (`GameStateType_Diff`) — acumular, não sobrescrever
@@ -341,7 +342,8 @@ venv\Scripts\python.exe -m src.main --web
 ```
 
 - Neste PC: `http://localhost:8000`
-- No celular: `http://192.168.x.x:8000` (mesmo Wi-Fi)
+- No celular: o próprio comando imprime o endereço da sua rede ao subir
+  (algo como `http://192.168.x.x:8000`). O celular precisa estar no mesmo Wi-Fi.
 
 **Arquitetura**: `src/services/copiloto.py` é o motor — lê o log, decide quando
 vale gastar chamada de IA, calcula em segundo plano. O painel do terminal e o
@@ -380,7 +382,7 @@ Ao final da semana 1:
 - [ ] Sistema roda sem crash por 30+ minutos
 - [ ] Identifica deck do oponente > 80% precisão
 - [ ] Latência < 2s por recomendação  
-- [ ] o jogador consegue rodar sozinho
+- [ ] O jogador consegue rodar sozinho
 - [ ] Código é entendível para os alunos
 
 ## 🔗 Links Úteis

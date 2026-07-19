@@ -1,6 +1,6 @@
 # 🎬 Fases de Uso (Perspectiva do Usuário)
 
-Do momento que o jogador abre o Arena até salvar os resultados.
+Do momento que O jogador abre o Arena até salvar os resultados.
 
 ## FASE 1: SETUP (uma vez, no início)
 
@@ -17,7 +17,7 @@ Do momento que o jogador abre o Arena até salvar os resultados.
 - Testa conexão com OBS
 
 ### 1.3 Configuração
-- o jogador informa: "Sou @jogador, jogo Standard e Draft"
+- O jogador informa: "Sou @jogador, jogo Standard e Draft"
 - Sistema pergunta se quer histórico salvo (yes/no)
 - Cria pasta `~/magic-ai/` com todos os dados locais
 
@@ -29,7 +29,7 @@ Do momento que o jogador abre o Arena até salvar os resultados.
 Duas opções:
 
 **Opção A: Manual (recomendada no início)**
-o jogador abre `minhas-cartas.csv` e atualiza:
+O jogador abre `minhas-cartas.csv` e atualiza:
 ```csv
 card_name,quantity,foil
 Lightning Bolt,4,0
@@ -42,7 +42,7 @@ Thoughtseize,3,0
 Sistema faz OCR das cartas do Arena e detecta o que tem.
 
 ### 2.2 Escolha de formato
-o jogador digita ou clica no dashboard:
+O jogador digita ou clica no dashboard:
 ```
 > jogar standard bo3
 > jogar draft
@@ -76,7 +76,7 @@ PORQUÊ:
 - Alternativa: Azorius Control (você só tem 87%)
 ```
 
-o jogador confirma ou escolhe alternativa.
+O jogador confirma ou escolhe alternativa.
 
 ### 2.4 Importar no Arena
 Sistema gera texto no formato Arena para copiar/colar:
@@ -86,7 +86,7 @@ Sistema gera texto no formato Arena para copiar/colar:
 ...
 ```
 
-o jogador cola no Arena e cria o deck.
+O jogador cola no Arena e cria o deck.
 
 ---
 
@@ -178,7 +178,7 @@ Razão: Deck deles vai remover suas criaturas pequenas.
 Precisa de ameaças resilientes + queimar life gain.
 ```
 
-o jogador aplica no Arena e joga próxima partida.
+O jogador aplica no Arena e joga próxima partida.
 
 ### 4.2 Aprendizado entre partidas
 Se ganhou G1:

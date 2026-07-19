@@ -119,7 +119,7 @@ Cada formato tem regras diferentes que MUDAM a estratégia de deck. A IA precisa
 
 ## 📊 Tabela de Decisão
 
-Quando jogador diz `> jogar [formato] [bo]`, sistema segue este fluxograma:
+Quando o jogador diz `> jogar [formato] [bo]`, sistema segue este fluxograma:
 
 ```
 STANDARD BO1:
@@ -157,7 +157,7 @@ BRAWL:
 
 ## 🎯 Cases Práticos
 
-### Case 1: o jogador joga Draft
+### Case 1: jogando Draft
 ```
 > jogar draft
 
@@ -175,7 +175,7 @@ Winrates médios: {source: 17Lands}
 Comece o Draft no Arena e me avise!
 ```
 
-### Case 2: o jogador joga Standard BO3
+### Case 2: jogando Standard BO3
 ```
 > jogar standard bo3
 
@@ -197,7 +197,7 @@ Sideboard: incluir 3x Roiling Vortex vs life gain
 Confirmar? (y/n)
 ```
 
-### Case 3: o jogador joga Historic BO1
+### Case 3: jogando Historic BO1
 ```
 > jogar historic bo1
 

@@ -3,7 +3,7 @@
 Por que isso merece um módulo? Porque o Arena pode estar instalado em vários
 lugares (Steam, Epic, instalador da Wizards, disco D:...) e o caminho muda de
 PC pra PC. Se a gente cravar `D:\\Steam\\...` no código, funciona na máquina do
-o jogador e quebra na de qualquer aluno que tentar rodar.
+do autor e quebra na de qualquer aluno que tentar rodar.
 
 O truque mais bonito daqui: o **próprio log** informa onde o jogo está
 instalado. A primeira linha que a Unity escreve é sempre:
