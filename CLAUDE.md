@@ -127,7 +127,7 @@ pensamento ANTES do texto. Use `resposta.content[-1].text`, não `[0]`.
 
 ## 🎓 Estilo de Código
 
-- **Comentários em português** (didático pra o projeto didático)
+- **Comentários em português** (o projeto também serve de material didático)
 - **Type hints sempre** (Pydantic + typing)
 - **Docstrings estilo Google**
 - **Nomes descritivos** (não abreviar)
