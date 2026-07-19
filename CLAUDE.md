@@ -335,6 +335,21 @@ Anotações:
 
 **PRÓXIMO PASSO**: Dia 2 (Scryfall) ou Dia 5 (IA). A percepção já está pronta.
 
+## 📦 Repositório
+
+**https://github.com/DACWB/ia-magic** — público, branch `main`.
+
+Ao publicar (19/07/2026), foi feita uma limpeza de dados pessoais. **Antes de
+commitar qualquer coisa nova, lembre**:
+
+- `.env` está no `.gitignore` e nunca foi commitado — mantenha assim
+- `data/magic-ai.db` (cache do Scryfall) e `logs/` também são ignorados
+- Não escreva IP de rede, caminho com nome de usuário, nem nome pessoal nos
+  arquivos — os docs usam "o jogador"
+- O e-mail dos commits é `DACWB@users.noreply.github.com` (anônimo do GitHub),
+  configurado localmente com `git config user.email`. Se clonar em outra
+  máquina, refaça essa configuração antes do primeiro commit.
+
 ## 🌐 Painel web (para usar no celular)
 
 ```bash
