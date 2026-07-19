@@ -49,3 +49,7 @@ htmlcov/
 # Sessions (contêm dados pessoais)
 sessions/*.json
 !sessions/.gitkeep
+
+# Documento de planejamento pessoal (agenda, negocios) - nunca publicar
+INICIO-RAPIDO.local.md
+*.local.md
